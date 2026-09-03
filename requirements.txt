@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pydantic-settings
+pymysql
+passlib
+bcrypt==4.0.1
+PyJWT
