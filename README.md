@@ -29,3 +29,42 @@ FRAMEWORK_BACKEND/
 ├── .env                # Variables de entorno
 └── requirements.txt    # Lista de dependencias del proyecto
 ```
+
+## 🛠️ Instalación y Uso Local
+
+Sigue estos pasos para configurar el entorno de desarrollo en tu máquina local:
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone <URL_DEL_REPOSITORIO>
+   cd FRAMEWORK_BACKEND
+   ```
+
+2. **Crear y activar el entorno virtual:**
+   - En Windows (PowerShell):
+     ```powershell
+     python -m venv venv
+     .\venv\Scripts\activate
+     ```
+   - En Linux/Mac:
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
+
+3. **Instalar dependencias:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configurar variables de entorno:**
+   Copia el archivo de ejemplo para configurar tus credenciales locales:
+   - Crea un archivo llamado `.env` en la raíz del proyecto.
+   - Copia el contenido del archivo `.env.example` dentro de tu nuevo `.env`.
+   - Ajusta los valores con tus credenciales de base de datos MySQL.
+
+5. **Iniciar el servidor local:**
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+   El servidor estará corriendo en `http://127.0.0.1:8000`. Puedes consultar la documentación interactiva en `http://127.0.0.1:8000/docs`.
