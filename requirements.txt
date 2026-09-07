@@ -7,3 +7,5 @@ pymysql
 passlib
 bcrypt==4.0.1
 PyJWT
+google-auth
+requests

@@ -25,3 +25,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(user_router.router)
+
+@app.get("/")
+def read_root():
+    return {"status": "ok", "message": "Conexión exitosa desde el backend FastAPI"}

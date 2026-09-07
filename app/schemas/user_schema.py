@@ -27,3 +27,6 @@ class User(UserBase):
 
     class Config:
         from_attributes = True
+
+class GoogleToken(BaseModel):
+    token: str
