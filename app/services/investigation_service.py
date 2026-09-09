@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from app.models.phase1_model import InvestigacionInforme, ArquetipoUsuario, ArquetipoNecesidad
-from app.schemas.phase1_schema import InvestigacionInformeCreate, ArquetipoUsuarioCreate, ArquetipoUsuarioUpdate
+from app.models.investigation_model import InvestigacionInforme, ArquetipoUsuario, ArquetipoNecesidad
+from app.schemas.investigation_schema import InvestigacionInformeCreate, ArquetipoUsuarioCreate, ArquetipoUsuarioUpdate
 
 # --- INFORME ---
 def get_or_create_informe(db: Session, proyecto_id: int):

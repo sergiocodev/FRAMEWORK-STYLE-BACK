@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app.core.database import SessionLocal, engine, Base
 from app.models.user_model import User
 from app.models.project_model import Cliente, Proyecto, TipoProyecto, NivelDiseno, EstadoProyecto
-from app.models import phase1_model, file_model
+from app.models import investigation_model, file_model
 
 def seed_data():
     db = SessionLocal()

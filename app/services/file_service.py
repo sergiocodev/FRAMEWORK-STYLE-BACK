@@ -49,3 +49,11 @@ def upload_file(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al subir archivo: {str(e)}")
+
+
+def get_files_by_phase(db: Session, proyecto_id: int, fase_id: int):
+    return db.query(Archivo).filter(
+        Archivo.proyecto_id == proyecto_id,
+        Archivo.fase_id == fase_id
+    ).all()
+
