@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import user_router, auth_router
+from app.routers import user_router, auth_router, phase1_router
 from app.core.database import engine, Base
+from app.models import user_model, project_model, file_model, phase1_model
 
 # Crear las tablas en la base de datos automáticamente al iniciar
 Base.metadata.create_all(bind=engine)
@@ -25,6 +26,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(user_router.router)
+app.include_router(phase1_router.router)
 
 @app.get("/")
 def read_root():
