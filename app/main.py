@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import user_router, auth_router, investigation_router, project_router
+from app.routers import user_router, auth_router, investigation_router, project_router, diseno_conceptual_router
 from app.core.database import engine, Base
-from app.models import user_model, project_model, file_model, investigation_model
+from app.models import user_model, project_model, file_model, investigation_model, diseno_conceptual_model
 
 # Crear las tablas en la base de datos automáticamente al iniciar
 Base.metadata.create_all(bind=engine)
@@ -28,6 +28,7 @@ app.include_router(auth_router.router)
 app.include_router(user_router.router)
 app.include_router(investigation_router.router)
 app.include_router(project_router.router)
+app.include_router(diseno_conceptual_router.router)
 
 @app.get("/")
 def read_root():

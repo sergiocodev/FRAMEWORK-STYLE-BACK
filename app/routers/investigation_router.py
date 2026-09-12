@@ -21,33 +21,33 @@ def get_current_user_id():
     return 1 # ID de usuario por defecto
 
 # --- INFORME ---
-@router.get("/informe", response_model=investigation_schema.InvestigacionInformeResponse)
+@router.get("/informe", response_model=investigation_schema.InvestigacionInformeResponse, summary="Obtener Informe", description="Obtiene los textos y conclusiones recopilados durante la fase de investigación del proyecto.")
 def get_informe(proyecto_id: int, db: Session = Depends(get_db)):
     return investigation_service.get_or_create_informe(db, proyecto_id)
 
-@router.put("/informe", response_model=investigation_schema.InvestigacionInformeResponse)
+@router.put("/informe", response_model=investigation_schema.InvestigacionInformeResponse, summary="Actualizar Informe", description="Guarda y actualiza los textos detallados del informe como expectativas, situación actual y restricciones.")
 def update_informe(proyecto_id: int, informe_data: investigation_schema.InvestigacionInformeCreate, db: Session = Depends(get_db)):
     return investigation_service.update_informe(db, proyecto_id, informe_data)
 
 # --- ARQUETIPOS ---
-@router.get("/arquetipos", response_model=List[investigation_schema.ArquetipoUsuarioResponse])
+@router.get("/arquetipos", response_model=List[investigation_schema.ArquetipoUsuarioResponse], summary="Listar Arquetipos", description="Devuelve todos los arquetipos o perfiles de usuario (User Personas) definidos en la investigación.")
 def list_arquetipos(proyecto_id: int, db: Session = Depends(get_db)):
     return investigation_service.get_arquetipos(db, proyecto_id)
 
-@router.post("/arquetipos", response_model=investigation_schema.ArquetipoUsuarioResponse)
+@router.post("/arquetipos", response_model=investigation_schema.ArquetipoUsuarioResponse, summary="Crear Arquetipo", description="Crea un nuevo arquetipo de usuario junto con su lista inicial de necesidades.")
 def create_arquetipo(proyecto_id: int, arquetipo_data: investigation_schema.ArquetipoUsuarioCreate, db: Session = Depends(get_db)):
     return investigation_service.create_arquetipo(db, proyecto_id, arquetipo_data)
 
-@router.put("/arquetipos/{arquetipo_id}", response_model=investigation_schema.ArquetipoUsuarioResponse)
+@router.put("/arquetipos/{arquetipo_id}", response_model=investigation_schema.ArquetipoUsuarioResponse, summary="Actualizar Arquetipo", description="Edita los datos de un arquetipo específico y sus necesidades.")
 def update_arquetipo(proyecto_id: int, arquetipo_id: int, arquetipo_data: investigation_schema.ArquetipoUsuarioUpdate, db: Session = Depends(get_db)):
     return investigation_service.update_arquetipo(db, arquetipo_id, arquetipo_data)
 
-@router.delete("/arquetipos/{arquetipo_id}")
+@router.delete("/arquetipos/{arquetipo_id}", summary="Eliminar Arquetipo", description="Elimina un arquetipo del proyecto completamente.")
 def delete_arquetipo(proyecto_id: int, arquetipo_id: int, db: Session = Depends(get_db)):
     return investigation_service.delete_arquetipo(db, arquetipo_id)
 
 # --- RECURSOS (ARCHIVOS) ---
-@router.post("/recursos", response_model=file_schema.ArchivoResponse)
+@router.post("/recursos", response_model=file_schema.ArchivoResponse, summary="Subir Recurso", description="Permite subir un archivo (imagen, pdf, documento) como recurso de contexto para la Fase 1.")
 def upload_recurso(
     proyecto_id: int, 
     file: UploadFile = File(...), 
@@ -65,7 +65,7 @@ def upload_recurso(
     )
 
 
-@router.get("/recursos", response_model=List[file_schema.ArchivoResponse])
+@router.get("/recursos", response_model=List[file_schema.ArchivoResponse], summary="Listar Recursos", description="Obtiene el listado de todos los archivos físicos subidos a la fase de investigación.")
 def get_recursos(proyecto_id: int, db: Session = Depends(get_db)):
     return file_service.get_files_by_phase(db=db, proyecto_id=proyecto_id, fase_id=1)
 
