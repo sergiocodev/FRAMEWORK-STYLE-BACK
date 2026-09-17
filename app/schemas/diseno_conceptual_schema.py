@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+﻿from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from app.models.diseno_conceptual_model import TipoNodo, EstadoVerificacion, TipoConexion, TipoContenido, PrioridadContenido, OrigenChecklist, EstadoChecklist
@@ -138,3 +138,4 @@ class DisenoConceptualChecklistItemResponse(DisenoConceptualChecklistItemBase):
 class WireframeChecklistItemUpdate(BaseModel):
     pregunta: Optional[str] = None
     estado: Optional[EstadoChecklist] = None
+
