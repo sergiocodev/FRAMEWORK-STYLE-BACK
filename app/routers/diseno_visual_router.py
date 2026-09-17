@@ -66,6 +66,10 @@ def delete_tipografia(tipo_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Typography not found")
     return {"message": "Typography deleted"}
 
+@router.post("/{proyecto_id}/tipografias/batch", response_model=List[schemas.TypographyItemResponse])
+def replace_tipografias_batch(proyecto_id: int, tipografias_in: List[schemas.TypographyItemCreate], db: Session = Depends(get_db)):
+    return service.replace_tipografias(db, proyecto_id, tipografias_in)
+
 @router.post("/iconos", response_model=schemas.IconItemResponse)
 def add_icono(icon_in: schemas.IconItemCreate, db: Session = Depends(get_db)):
     return service.add_icono(db, icon_in)

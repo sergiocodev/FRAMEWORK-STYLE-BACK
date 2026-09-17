@@ -38,6 +38,7 @@ class TypographyItem(Base):
     tamano_px = Column(Integer, nullable=False)
     peso = Column(String(50), nullable=False) # e.g. Semibold (600)
     interlineado = Column(Float, nullable=False)
+    tipo_fuente = Column(String(50), default="Principal") # Principal o Secundaria
     orden = Column(Integer, default=0)
 
 class IconItem(Base):

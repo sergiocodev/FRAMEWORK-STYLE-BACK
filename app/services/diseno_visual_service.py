@@ -77,6 +77,30 @@ def delete_tipografia(db: Session, tipo_id: int):
         db.commit()
     return tipo
 
+from typing import List
+
+def replace_tipografias(db: Session, proyecto_id: int, tipografias_in: List[TypographyItemCreate]):
+    # Borrar existentes de forma atómica
+    db.query(TypographyItem).filter(TypographyItem.proyecto_id == proyecto_id).delete()
+    
+    # Crear nuevos
+    nuevas = []
+    for tipo_in in tipografias_in:
+        # Asegurarnos de que el proyecto_id es el correcto
+        tipo_data = tipo_in.dict()
+        tipo_data["proyecto_id"] = proyecto_id
+        nuevo_tipo = TypographyItem(**tipo_data)
+        db.add(nuevo_tipo)
+        nuevas.append(nuevo_tipo)
+        
+    db.commit()
+    
+    # Refrescar para obtener los IDs autogenerados
+    for tipo in nuevas:
+        db.refresh(tipo)
+        
+    return nuevas
+
 def get_iconos(db: Session, proyecto_id: int):
     return db.query(IconItem).filter(IconItem.proyecto_id == proyecto_id).all()
 

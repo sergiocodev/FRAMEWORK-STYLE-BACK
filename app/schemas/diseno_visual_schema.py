@@ -48,6 +48,7 @@ class TypographyItemBase(BaseModel):
     tamano_px: int
     peso: str
     interlineado: float
+    tipo_fuente: Optional[str] = "Principal"
     orden: Optional[int] = 0
 
 class TypographyItemCreate(TypographyItemBase):
