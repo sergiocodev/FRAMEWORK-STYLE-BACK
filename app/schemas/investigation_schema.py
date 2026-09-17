@@ -1,14 +1,18 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from app.schemas.file_schema import ArchivoResponse
 
 # --- INFORME ---
 class InvestigacionInformeBase(BaseModel):
-    necesidad_proyecto: Optional[str] = None
-    expectativas_cliente: Optional[str] = None
-    situacion_actual: Optional[str] = None
-    recursos_restricciones: Optional[str] = None
+    problema: Optional[str] = None
+    objetivo: Optional[str] = None
+    producto: Optional[str] = None
+    expectativas: Optional[str] = None
+    referencias: Optional[Dict[str, Any]] = None
+    analisis_actual: Optional[str] = None
+    restricciones: Optional[str] = None
+    identidad_marca: Optional[Dict[str, Any]] = None
     conclusiones_fase2: Optional[str] = None
 
 class InvestigacionInformeCreate(InvestigacionInformeBase):

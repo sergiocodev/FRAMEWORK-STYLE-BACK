@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, text, BigInteger, Integer, ForeignKey, Text
+from sqlalchemy import Column, String, DateTime, text, BigInteger, Integer, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -6,10 +6,14 @@ class InvestigacionInforme(Base):
     __tablename__ = "investigacion_informe"
 
     proyecto_id = Column(BigInteger, ForeignKey("proyectos.id", ondelete="CASCADE"), primary_key=True)
-    necesidad_proyecto = Column(Text, nullable=True)
-    expectativas_cliente = Column(Text, nullable=True)
-    situacion_actual = Column(Text, nullable=True)
-    recursos_restricciones = Column(Text, nullable=True)
+    problema = Column(Text, nullable=True)
+    objetivo = Column(Text, nullable=True)
+    producto = Column(Text, nullable=True)
+    expectativas = Column(Text, nullable=True)
+    referencias = Column(JSON, nullable=True)
+    analisis_actual = Column(Text, nullable=True)
+    restricciones = Column(Text, nullable=True)
+    identidad_marca = Column(JSON, nullable=True)
     conclusiones_fase2 = Column(Text, nullable=True)
     actualizado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
