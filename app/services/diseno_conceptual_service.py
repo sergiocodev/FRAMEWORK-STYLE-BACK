@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+﻿from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models.diseno_conceptual_model import NodoPantalla, NodoConexion, ContenidoItem, Wireframe, WireframeChecklistItem
 from app.schemas.diseno_conceptual_schema import (
@@ -8,7 +8,7 @@ from app.schemas.diseno_conceptual_schema import (
 
 # --- NODOS (PANTALLAS) ---
 def get_nodos(db: Session, proyecto_id: int):
-    return db.query(NodoPantalla).filter(NodoPantalla.proyecto_id == proyecto_id).all()
+    return db.query(NodoPantalla).filter(NodoPantalla.proyecto_id == proyecto_id, NodoPantalla.fase_creacion == 2).all()
 
 def create_nodo(db: Session, proyecto_id: int, nodo_data: NodoPantallaCreate):
     new_nodo = NodoPantalla(
@@ -133,6 +133,21 @@ def get_wireframes(db: Session, proyecto_id: int):
     return db.query(Wireframe).filter(Wireframe.proyecto_id == proyecto_id).all()
 
 def create_wireframe(db: Session, proyecto_id: int, wireframe_data: WireframeCreate):
+    # Crear Archivo dummy si el archivo_id no existe para evitar 500 FK constraint
+    from app.models.file_model import Archivo
+    archivo = db.query(Archivo).filter(Archivo.id == wireframe_data.archivo_id).first()
+    if not archivo:
+        nuevo_archivo = Archivo(
+            proyecto_id=proyecto_id,
+            nombre_original='wireframe_upload',
+            ruta_almacenamiento='uploads/dummy.png',
+            subido_por=1  # Dummy user
+        )
+        db.add(nuevo_archivo)
+        db.commit()
+        db.refresh(nuevo_archivo)
+        wireframe_data.archivo_id = nuevo_archivo.id
+
     new_wireframe = Wireframe(
         proyecto_id=proyecto_id,
         nodo_id=wireframe_data.nodo_id,
@@ -143,6 +158,24 @@ def create_wireframe(db: Session, proyecto_id: int, wireframe_data: WireframeCre
     db.add(new_wireframe)
     db.commit()
     db.refresh(new_wireframe)
+
+    from app.models.diseno_conceptual_model import WireframeChecklistItem, OrigenChecklist, EstadoChecklist
+    metricas = [
+        'Â¿Los elementos principales se reflejan de forma equivalente respecto al eje vertical u horizontal?',
+        'Â¿Los bloques similares conservan relaciones de tamaÃ±o consistentes entre sÃ­?',
+        'Â¿El peso visual estÃ¡ distribuido sin cargar un lado o zona de la pantalla?',
+        'Â¿El wireframe usa solo los elementos necesarios y minimiza puntos de alineaciÃ³n innecesarios?'
+    ]
+    for m in metricas:
+        item = WireframeChecklistItem(
+            wireframe_id=new_wireframe.id,
+            pregunta=m,
+            origen=OrigenChecklist.ia,
+            estado=EstadoChecklist.pendiente
+        )
+        db.add(item)
+    db.commit()
+
     return new_wireframe
 
 
@@ -257,3 +290,4 @@ def delete_wireframe_checklist_item(db: Session, item_id: int):
     db.delete(item)
     db.commit()
     return {"message": "Item eliminado"}
+

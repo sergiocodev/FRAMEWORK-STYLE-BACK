@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, text, BigInteger, Enum, ForeignKey, Boolean
+﻿from sqlalchemy import Column, Integer, String, DateTime, text, BigInteger, Enum, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 import enum
@@ -51,6 +51,7 @@ class NodoPantalla(Base):
     prioridad = Column(String(20), nullable=True)
     estado_verificacion = Column(Enum(EstadoVerificacion), default=EstadoVerificacion.pendiente)
     enlace_diseno_externo = Column(String(500), nullable=True)
+    fase_creacion = Column(Integer, default=2)
     creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
     actualizado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
@@ -90,6 +91,7 @@ class Wireframe(Base):
     proyecto_id = Column(BigInteger, ForeignKey("proyectos.id", ondelete="CASCADE"), nullable=False)
     nodo_id = Column(BigInteger, ForeignKey("nodos_pantalla.id", ondelete="SET NULL"), nullable=True)
     archivo_id = Column(BigInteger, ForeignKey("archivos.id", ondelete="CASCADE"), nullable=False)
+    titulo = Column(String(255), nullable=True)
     version = Column(String(10), default='v1')
     generado_por_ia = Column(Boolean, default=False)
     creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
@@ -120,3 +122,4 @@ class DisenoConceptualChecklistItem(Base):
     origen = Column(Enum(OrigenChecklist), nullable=False, default=OrigenChecklist.ia)
     estado = Column(Enum(EstadoChecklist), nullable=False, default=EstadoChecklist.pendiente)
     creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+

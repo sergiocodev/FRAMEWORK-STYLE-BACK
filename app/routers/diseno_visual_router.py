@@ -8,7 +8,7 @@ from app.services import diseno_visual_service as service
 
 router = APIRouter(
     prefix="/api/diseno-visual",
-    tags=["Diseno Visual"]
+    tags=["Fase 3: Diseño Visual"]
 )
 
 @router.get("/{proyecto_id}/completo", response_model=schemas.DisenoVisualCompletoResponse)
