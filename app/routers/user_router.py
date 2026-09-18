@@ -11,6 +11,10 @@ router = APIRouter(
     tags=["Users"]
 )
 
+@router.get("/me", response_model=user_schema.User)
+def get_me(current_user: user_schema.User = Depends(get_current_user)):
+    return current_user
+
 @router.post("/", response_model=user_schema.User)
 def create_user(user: user_schema.UserCreate, db: Session = Depends(get_db), current_user: user_schema.User = Depends(get_current_user)):
     db_user = user_service.get_user_by_email(db, email=user.email)

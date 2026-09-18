@@ -20,7 +20,7 @@ class ProyectoBase(BaseModel):
     estado: Optional[EstadoProyecto] = EstadoProyecto.en_proceso
 
 class ProyectoCreate(ProyectoBase):
-    responsable_id: int
+    pass
 
 class ProyectoUpdate(BaseModel):
     nombre: Optional[str] = None
@@ -30,12 +30,12 @@ class ProyectoUpdate(BaseModel):
     nivel_diseno_objetivo: Optional[NivelDiseno] = None
     estado: Optional[EstadoProyecto] = None
     fase_actual_id: Optional[int] = None
-    responsable_id: Optional[int] = None
+    user_id: Optional[int] = None
 
 class ProyectoResponse(ProyectoBase):
     id: int
     fase_actual_id: int
-    responsable_id: int
+    user_id: int
     cliente: Optional[ClienteResponse] = None
     creado_en: datetime
     actualizado_en: Optional[datetime] = None

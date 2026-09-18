@@ -51,7 +51,7 @@ def seed_data():
                 nivel_diseno_objetivo=NivelDiseno.medio,
                 estado=EstadoProyecto.en_proceso,
                 fase_actual_id=1,
-                responsable_id=user.id
+                user_id=user.id
             )
             db.add(proyecto)
             db.commit()

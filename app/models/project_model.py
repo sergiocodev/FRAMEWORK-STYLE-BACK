@@ -18,16 +18,6 @@ class EstadoProyecto(str, enum.Enum):
     completado = "completado"
     detenido = "detenido"
 
-class Cliente(Base):
-    __tablename__ = "clientes"
-
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    nombre = Column(String(160), nullable=False)
-    contacto_nombre = Column(String(120), nullable=True)
-    contacto_correo = Column(String(160), nullable=True)
-    creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
-
-    proyectos = relationship("Proyecto", back_populates="cliente")
 
 class Proyecto(Base):
     __tablename__ = "proyectos"
@@ -40,7 +30,7 @@ class Proyecto(Base):
     nivel_diseno_objetivo = Column(Enum(NivelDiseno), nullable=False, default=NivelDiseno.medio)
     estado = Column(Enum(EstadoProyecto), nullable=False, default=EstadoProyecto.en_proceso)
     fase_actual_id = Column(Integer, nullable=False, default=1)
-    responsable_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
     actualizado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
