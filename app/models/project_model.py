@@ -36,5 +36,5 @@ class Proyecto(Base):
     actualizado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
     cliente = relationship("Cliente", back_populates="proyectos")
-    informe = relationship("InvestigacionInforme", back_populates="proyecto", uselist=False)
-    arquetipos = relationship("ArquetipoUsuario", back_populates="proyecto")
+    informe = relationship("InvestigacionInforme", back_populates="proyecto", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
+    arquetipos = relationship("ArquetipoUsuario", back_populates="proyecto", cascade="all, delete-orphan", passive_deletes=True)
