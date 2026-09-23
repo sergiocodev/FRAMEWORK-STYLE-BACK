@@ -9,7 +9,7 @@ class InvestigacionInformeBase(BaseModel):
     objetivo: Optional[str] = None
     producto: Optional[str] = None
     expectativas: Optional[str] = None
-    referencias: Optional[Dict[str, Any]] = None
+    referencias: Optional[List[Dict[str, Any]]] = None
     analisis_actual: Optional[str] = None
     restricciones: Optional[str] = None
     identidad_marca: Optional[Dict[str, Any]] = None

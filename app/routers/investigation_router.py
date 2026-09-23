@@ -72,5 +72,55 @@ def upload_recurso(
 @router.get("/recursos", response_model=List[file_schema.ArchivoResponse], summary="Listar Recursos", description="Obtiene el listado de todos los archivos físicos subidos a la fase de investigación.")
 def get_recursos(proyecto_id: int, db: Session = Depends(get_db), current_user: user_schema.User = Depends(get_current_user)):
     verify_project_ownership(db, proyecto_id, current_user.id)
-    return file_service.get_files_by_phase(db=db, proyecto_id=proyecto_id, fase_id=1)
+    return file_service.get_files_by_phase(db=db, proyecto_id=proyecto_id, fase_id=1, contexto_tipo="recurso_investigacion")
 
+@router.delete("/recursos/{archivo_id}", summary="Eliminar Recurso", description="Elimina un recurso subido en la fase de investigación.")
+def delete_recurso(
+    proyecto_id: int, 
+    archivo_id: int, 
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_user)
+):
+    verify_project_ownership(db, proyecto_id, current_user.id)
+    from app.models import file_model
+    import os
+    
+    archivo = db.query(file_model.Archivo).filter(
+        file_model.Archivo.id == archivo_id,
+        file_model.Archivo.proyecto_id == proyecto_id
+    ).first()
+    
+    if not archivo:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        
+    if os.path.exists(archivo.ruta_almacenamiento):
+        os.remove(archivo.ruta_almacenamiento)
+        
+    db.delete(archivo)
+    db.commit()
+    return {"message": "Archivo eliminado correctamente"}
+
+@router.post("/referencias/upload", summary="Subir Referencia (Imagen)", description="Sube una imagen para la sección de expectativas/referencias y devuelve su URL.")
+def upload_referencia(
+    proyecto_id: int, 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_user)
+):
+    verify_project_ownership(db, proyecto_id, current_user.id)
+    archivo = file_service.upload_file(
+        db=db, 
+        file=file, 
+        proyecto_id=proyecto_id, 
+        subido_por=current_user.id,
+        fase_id=1,
+        contexto_tipo="referencia_investigacion"
+    )
+    url_path = "/" + archivo.ruta_almacenamiento.replace("\\", "/")
+    # environment variable for backend URL is commonly used, but since we are running locally with CORS, 
+    # returning the absolute path relative to the domain is enough: "/uploads/uuid.png" 
+    # but since the frontend expects full URL or uses environment apiUrl, it's safer to just return the path
+    # and the frontend will prepend the apiUrl. Actually, the frontend image tag just uses src="http://localhost:8000/uploads/..." 
+    # Let's check environment.apiUrl in frontend. For now, returning full path or relative path depends on frontend.
+    # We will return the relative path and let the frontend format it if necessary.
+    return {"url": url_path}
