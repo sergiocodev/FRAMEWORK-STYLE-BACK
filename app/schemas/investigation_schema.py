@@ -51,12 +51,14 @@ class ArquetipoUsuarioCreate(ArquetipoUsuarioBase):
 
 class ArquetipoUsuarioUpdate(ArquetipoUsuarioBase):
     avatar_archivo_id: Optional[int] = None
+    avatar_url: Optional[str] = None
     necesidades: Optional[List[ArquetipoNecesidadCreate]] = []
 
 class ArquetipoUsuarioResponse(ArquetipoUsuarioBase):
     id: int
     proyecto_id: int
     avatar_archivo_id: Optional[int] = None
+    avatar_url: Optional[str] = None
     necesidades: List[ArquetipoNecesidadResponse] = []
 
     class Config:
