@@ -29,10 +29,15 @@ def update_informe(proyecto_id: int, informe_data: investigation_schema.Investig
     return investigation_service.update_informe(db, proyecto_id, informe_data)
 
 # --- ARQUETIPOS ---
-@router.get("/arquetipos", response_model=List[investigation_schema.ArquetipoUsuarioResponse], summary="Listar Arquetipos", description="Devuelve todos los arquetipos o perfiles de usuario (User Personas) definidos en la investigación.")
+@router.get("/arquetipos", response_model=list[investigation_schema.ArquetipoUsuarioResponse], summary="Listar Arquetipos", description="Devuelve todos los arquetipos o perfiles de usuario (User Personas) definidos en la investigación.")
 def list_arquetipos(proyecto_id: int, db: Session = Depends(get_db), current_user: user_schema.User = Depends(get_current_user)):
     verify_project_ownership(db, proyecto_id, current_user.id)
     return investigation_service.get_arquetipos(db, proyecto_id)
+
+@router.put("/arquetipos/bulk", response_model=list[investigation_schema.ArquetipoUsuarioResponse], summary="Sincronizar Arquetipos")
+def bulk_sync_arquetipos(proyecto_id: int, arquetipos_data: list[investigation_schema.ArquetipoUsuarioCreate], db: Session = Depends(get_db), current_user: user_schema.User = Depends(get_current_user)):
+    verify_project_ownership(db, proyecto_id, current_user.id)
+    return investigation_service.bulk_sync_arquetipos(db, proyecto_id, arquetipos_data)
 
 @router.post("/arquetipos", response_model=investigation_schema.ArquetipoUsuarioResponse, summary="Crear Arquetipo", description="Crea un nuevo arquetipo de usuario junto con su lista inicial de necesidades.")
 def create_arquetipo(proyecto_id: int, arquetipo_data: investigation_schema.ArquetipoUsuarioCreate, db: Session = Depends(get_db), current_user: user_schema.User = Depends(get_current_user)):

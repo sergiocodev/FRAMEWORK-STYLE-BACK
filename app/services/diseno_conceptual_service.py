@@ -161,10 +161,10 @@ def create_wireframe(db: Session, proyecto_id: int, wireframe_data: WireframeCre
 
     from app.models.diseno_conceptual_model import WireframeChecklistItem, OrigenChecklist, EstadoChecklist
     metricas = [
-        'Â¿Los elementos principales se reflejan de forma equivalente respecto al eje vertical u horizontal?',
-        'Â¿Los bloques similares conservan relaciones de tamaÃ±o consistentes entre sÃ­?',
-        'Â¿El peso visual estÃ¡ distribuido sin cargar un lado o zona de la pantalla?',
-        'Â¿El wireframe usa solo los elementos necesarios y minimiza puntos de alineaciÃ³n innecesarios?'
+        '¿Los elementos principales se reflejan de forma equivalente respecto al eje vertical u horizontal?',
+        '¿Los bloques similares conservan relaciones de tamaño consistentes entre sí?',
+        '¿El peso visual está distribuido sin cargar un lado o zona de la pantalla?',
+        '¿El wireframe usa solo los elementos necesarios y minimiza puntos de alineación innecesarios?'
     ]
     for m in metricas:
         item = WireframeChecklistItem(
@@ -219,7 +219,88 @@ from app.schemas.diseno_conceptual_schema import (
 )
 
 def get_project_checklist(db: Session, proyecto_id: int):
-    return db.query(DisenoConceptualChecklistItem).filter(DisenoConceptualChecklistItem.proyecto_id == proyecto_id).all()
+    items = db.query(DisenoConceptualChecklistItem).filter(DisenoConceptualChecklistItem.proyecto_id == proyecto_id).all()
+    if not items:
+        from app.models.investigation_model import ArquetipoUsuario, InvestigacionInforme
+        from app.models.diseno_conceptual_model import OrigenChecklist, EstadoChecklist
+        from app.core.config import settings
+        import json
+        
+        arquetipos = db.query(ArquetipoUsuario).filter(ArquetipoUsuario.proyecto_id == proyecto_id).all()
+        informe = db.query(InvestigacionInforme).filter(InvestigacionInforme.proyecto_id == proyecto_id).first()
+        
+        context = "Investigación de Fase 1:\n"
+        if informe:
+            context += f"- Problema: {informe.problema or 'N/A'}\n"
+            context += f"- Objetivo: {informe.objetivo or 'N/A'}\n"
+            context += f"- Producto: {informe.producto or 'N/A'}\n"
+            context += f"- Expectativas: {informe.expectativas or 'N/A'}\n"
+            context += f"- Restricciones: {informe.restricciones or 'N/A'}\n"
+        
+        context += "\nArquetipos de Usuario:\n"
+        for arq in arquetipos:
+            context += f"- {arq.nombre} ({arq.etiqueta}): "
+            needs = [n.descripcion for n in arq.necesidades]
+            context += ", ".join(needs) if needs else "Sin necesidades"
+            context += "\n"
+
+        api_key = settings.GEMINI_API_KEY
+        checklist_list = []
+        
+        if not api_key or api_key == "TU_API_KEY_AQUI":
+            checklist_list = ["Error: Falta configurar GEMINI_API_KEY en .env para usar la IA."]
+        else:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-flash-latest')
+                
+                prompt = f'''Eres un analista de UX/UI evaluando wireframes (baja fidelidad). Tu tarea es generar un checklist estrictamente basado en la investigación proporcionada.
+                
+                REGLAS CRÍTICAS:
+                1. NO inventes funcionalidades. Traduce ÚNICAMENTE lo que está explícitamente escrito en el contexto a ítems de interfaz. Si la investigación tiene 2 datos, genera 2 o 3 ítems.
+                2. Es un checklist de Wireframes (estructura y elementos clave), no de diseño final.
+                3. Cada ítem debe ser una condición accionable y corta (ej. "El wireframe incluye la sección de inventario").
+                
+                Devuelve ESTRÍCTAMENTE un array JSON de strings.
+                
+                Contexto de Investigación:
+                {context}'''
+                
+                response = model.generate_content(prompt)
+                text = response.text
+                if '```json' in text:
+                    text = text.split('```json')[1].split('```')[0]
+                elif '```' in text:
+                    text = text.split('```')[1].split('```')[0]
+                    
+                checklist_list = json.loads(text.strip())
+            except Exception as e:
+                print("Error llamando a Gemini:", e)
+                checklist_list = [f"Error al generar con IA: {str(e)}"]
+                
+        created_any = False
+        for desc in checklist_list:
+            new_item = DisenoConceptualChecklistItem(
+                proyecto_id=proyecto_id,
+                pregunta=desc[:255],
+                origen=OrigenChecklist.ia,
+                estado=EstadoChecklist.pendiente
+            )
+            db.add(new_item)
+            created_any = True
+            
+        if created_any:
+            db.commit()
+            items = db.query(DisenoConceptualChecklistItem).filter(DisenoConceptualChecklistItem.proyecto_id == proyecto_id).all()
+            
+    return items
+
+
+def regenerate_project_checklist(db: Session, proyecto_id: int):
+    db.query(DisenoConceptualChecklistItem).filter(DisenoConceptualChecklistItem.proyecto_id == proyecto_id).delete()
+    db.commit()
+    return get_project_checklist(db, proyecto_id)
 
 def create_project_checklist_item(db: Session, proyecto_id: int, item_data: DisenoConceptualChecklistItemCreate):
     new_item = DisenoConceptualChecklistItem(
@@ -290,4 +371,6 @@ def delete_wireframe_checklist_item(db: Session, item_id: int):
     db.delete(item)
     db.commit()
     return {"message": "Item eliminado"}
+
+
 
