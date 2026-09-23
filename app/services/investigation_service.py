@@ -52,6 +52,33 @@ def create_arquetipo(db: Session, proyecto_id: int, arquetipo_data: ArquetipoUsu
         
     return new_arquetipo
 
+def bulk_sync_arquetipos(db: Session, proyecto_id: int, arquetipos_data: list[ArquetipoUsuarioCreate]):
+    db.query(ArquetipoUsuario).filter(ArquetipoUsuario.proyecto_id == proyecto_id).delete()
+    db.commit()
+    created = []
+    for arq_data in arquetipos_data:
+        new_arq = ArquetipoUsuario(
+            proyecto_id=proyecto_id,
+            nombre=arq_data.nombre,
+            etiqueta=arq_data.etiqueta,
+            orden=arq_data.orden
+        )
+        db.add(new_arq)
+        db.flush()
+        if arq_data.necesidades:
+            for nec_data in arq_data.necesidades:
+                new_nec = ArquetipoNecesidad(
+                    arquetipo_id=new_arq.id,
+                    descripcion=nec_data.descripcion,
+                    orden=nec_data.orden
+                )
+                db.add(new_nec)
+        created.append(new_arq)
+    db.commit()
+    for arq in created:
+        db.refresh(arq)
+    return created
+
 def update_arquetipo(db: Session, arquetipo_id: int, arquetipo_data: ArquetipoUsuarioUpdate):
     arquetipo = db.query(ArquetipoUsuario).filter(ArquetipoUsuario.id == arquetipo_id).first()
     if not arquetipo:

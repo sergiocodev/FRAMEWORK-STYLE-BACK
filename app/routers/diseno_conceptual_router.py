@@ -79,6 +79,11 @@ def delete_wireframe(proyecto_id: int, wireframe_id: int, db: Session = Depends(
 def get_project_checklist(proyecto_id: int, db: Session = Depends(get_db)):
     return diseno_conceptual_service.get_project_checklist(db, proyecto_id)
 
+
+@router.post("/checklist/regenerate", response_model=List[diseno_conceptual_schema.DisenoConceptualChecklistItemResponse], summary="Regenerar Checklist de la Fase 2")
+def regenerate_project_checklist(proyecto_id: int, db: Session = Depends(get_db)):
+    return diseno_conceptual_service.regenerate_project_checklist(db, proyecto_id)
+
 @router.post("/checklist", response_model=diseno_conceptual_schema.DisenoConceptualChecklistItemResponse, summary="Añadir Item al Checklist de la Fase 2")
 def create_project_checklist_item(proyecto_id: int, item_data: diseno_conceptual_schema.DisenoConceptualChecklistItemCreate, db: Session = Depends(get_db)):
     return diseno_conceptual_service.create_project_checklist_item(db, proyecto_id, item_data)
