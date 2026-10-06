@@ -100,6 +100,20 @@ class Wireframe(Base):
     archivo = relationship("Archivo")
     checklist_items = relationship("WireframeChecklistItem", back_populates="wireframe", cascade="all, delete-orphan")
 
+    @property
+    def archivo_url(self):
+        import os
+        if self.archivo and getattr(self.archivo, "ruta_almacenamiento", None):
+            return f"/uploads/wireframes/{os.path.basename(self.archivo.ruta_almacenamiento)}"
+        return None
+
+    @property
+    def fileName(self):
+        if self.archivo:
+            return self.archivo.nombre_original
+        return None
+
+
 class WireframeChecklistItem(Base):
     __tablename__ = "wireframe_checklist_items"
 

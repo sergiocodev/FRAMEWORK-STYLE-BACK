@@ -100,6 +100,8 @@ class WireframeResponse(WireframeBase):
     proyecto_id: int
     creado_en: datetime
     checklist_items: List[WireframeChecklistItemResponse] = []
+    archivo_url: Optional[str] = None
+    fileName: Optional[str] = None
 
     class Config:
         from_attributes = True

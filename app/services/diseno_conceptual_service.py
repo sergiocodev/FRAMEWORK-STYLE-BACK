@@ -1,9 +1,12 @@
-﻿from sqlalchemy.orm import Session
-from fastapi import HTTPException
+import os
+import uuid
+import shutil
+from sqlalchemy.orm import Session
+from fastapi import HTTPException, UploadFile
 from app.models.diseno_conceptual_model import NodoPantalla, NodoConexion, ContenidoItem, Wireframe, WireframeChecklistItem
 from app.schemas.diseno_conceptual_schema import (
     NodoPantallaCreate, NodoPantallaUpdate, NodoConexionCreate,
-    ContenidoItemCreate, WireframeCreate
+    ContenidoItemCreate, WireframeCreate, ContenidoItemUpdate, WireframeChecklistItemUpdate, WireframeChecklistItemCreate
 )
 
 # --- NODOS (PANTALLAS) ---
@@ -132,55 +135,66 @@ def create_contenido_inventario(db: Session, proyecto_id: int, contenido_data: C
 def get_wireframes(db: Session, proyecto_id: int):
     return db.query(Wireframe).filter(Wireframe.proyecto_id == proyecto_id).all()
 
-def create_wireframe(db: Session, proyecto_id: int, wireframe_data: WireframeCreate):
-    # Crear Archivo dummy si el archivo_id no existe para evitar 500 FK constraint
+def create_wireframe(db: Session, proyecto_id: int, file: UploadFile):
     from app.models.file_model import Archivo
-    archivo = db.query(Archivo).filter(Archivo.id == wireframe_data.archivo_id).first()
-    if not archivo:
-        nuevo_archivo = Archivo(
-            proyecto_id=proyecto_id,
-            nombre_original='wireframe_upload',
-            ruta_almacenamiento='uploads/dummy.png',
-            subido_por=1  # Dummy user
-        )
-        db.add(nuevo_archivo)
-        db.commit()
-        db.refresh(nuevo_archivo)
-        wireframe_data.archivo_id = nuevo_archivo.id
+    import uuid
+    import shutil
+    import os
+    
+    UPLOAD_DIR_WF = "uploads/wireframes/"
+    os.makedirs(UPLOAD_DIR_WF, exist_ok=True)
+    
+    file_extension = file.filename.split(".")[-1] if "." in file.filename else "png"
+    file_name = f"{uuid.uuid4()}.{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR_WF, file_name)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    nuevo_archivo = Archivo(
+        proyecto_id=proyecto_id,
+        nombre_original=file.filename,
+        ruta_almacenamiento=file_path,
+        subido_por=1
+    )
+    db.add(nuevo_archivo)
+    db.commit()
+    db.refresh(nuevo_archivo)
 
     new_wireframe = Wireframe(
         proyecto_id=proyecto_id,
-        nodo_id=wireframe_data.nodo_id,
-        archivo_id=wireframe_data.archivo_id,
-        version=wireframe_data.version,
-        generado_por_ia=wireframe_data.generado_por_ia
+        archivo_id=nuevo_archivo.id,
+        version="v1",
+        generado_por_ia=False
     )
     db.add(new_wireframe)
     db.commit()
+    
     db.refresh(new_wireframe)
-
-    from app.models.diseno_conceptual_model import WireframeChecklistItem, OrigenChecklist, EstadoChecklist
-    metricas = [
-        '¿Los elementos principales se reflejan de forma equivalente respecto al eje vertical u horizontal?',
-        '¿Los bloques similares conservan relaciones de tamaño consistentes entre sí?',
-        '¿El peso visual está distribuido sin cargar un lado o zona de la pantalla?',
-        '¿El wireframe usa solo los elementos necesarios y minimiza puntos de alineación innecesarios?'
-    ]
-    for m in metricas:
-        item = WireframeChecklistItem(
+    
+    # Generate default checklist items for wireframe
+    default_items = [
+            "¿Los elementos principales se reflejan de forma simétrica respecto al eje vertical, horizontal o radial?",
+            "¿Los bloques similares conservan relaciones de tamaño consistentes entre sí?",
+            "¿Los elementos de la pantalla se ven distribuidos de manera equilibrada, sin que una zona se vea demasiado cargada o vacía en comparación con las demás?",
+            "¿La pantalla contiene solo los elementos necesarios y estos se ven ordenados y ubicados de forma consistente?"
+        ]
+    
+    for pregunta in default_items:
+        chk = WireframeChecklistItem(
             wireframe_id=new_wireframe.id,
-            pregunta=m,
-            origen=OrigenChecklist.ia,
-            estado=EstadoChecklist.pendiente
+            pregunta=pregunta,
+            origen="manual",
+            estado="pendiente"
         )
-        db.add(item)
+        db.add(chk)
     db.commit()
 
     return new_wireframe
 
 
-# --- INVENTARIO ADICIONAL ---
-from app.schemas.diseno_conceptual_schema import ContenidoItemUpdate
+def get_wireframes(db: Session, proyecto_id: int):
+    return db.query(Wireframe).filter(Wireframe.proyecto_id == proyecto_id).all()
 
 def update_contenido_inventario(db: Session, item_id: int, item_data: ContenidoItemUpdate):
     item = db.query(ContenidoItem).filter(ContenidoItem.id == item_id).first()
@@ -253,14 +267,14 @@ def get_project_checklist(db: Session, proyecto_id: int):
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-flash-latest')
+                model = genai.GenerativeModel(settings.GEMINI_MODEL)
                 
-                prompt = f'''Eres un analista de UX/UI evaluando wireframes (baja fidelidad). Tu tarea es generar un checklist estrictamente basado en la investigación proporcionada.
+                prompt = f'''Eres un analista de UX/UI evaluando un diseo conceptual de sistema (baja fidelidad). Tu tarea es generar un checklist estrictamente basado en la investigación proporcionada.
                 
                 REGLAS CRÍTICAS:
                 1. NO inventes funcionalidades. Traduce ÚNICAMENTE lo que está explícitamente escrito en el contexto a ítems de interfaz. Si la investigación tiene 2 datos, genera 2 o 3 ítems.
-                2. Es un checklist de Wireframes (estructura y elementos clave), no de diseño final.
-                3. Cada ítem debe ser una condición accionable y corta (ej. "El wireframe incluye la sección de inventario").
+                2. Es un checklist del diseo conceptual general del sistema (estructura y flujos clave), no de diseño final.
+                3. Cada ítem debe ser una condición accionable y corta referida a TODO el sistema en conjunto (ej. "El sistema incluye la navegación al inventario").
                 
                 Devuelve ESTRÍCTAMENTE un array JSON de strings.
                 
