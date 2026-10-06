@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -55,9 +55,9 @@ def create_contenido_inventario(proyecto_id: int, contenido_data: diseno_concept
 def get_wireframes(proyecto_id: int, db: Session = Depends(get_db)):
     return diseno_conceptual_service.get_wireframes(db, proyecto_id)
 
-@router.post("/wireframes", response_model=diseno_conceptual_schema.WireframeResponse, summary="Vincular un Archivo subido como Wireframe Oficial", description="Asocia un archivo previamente subido como un wireframe oficial dentro de la fase de diseño conceptual.")
-def create_wireframe(proyecto_id: int, wireframe_data: diseno_conceptual_schema.WireframeCreate, db: Session = Depends(get_db)):
-    return diseno_conceptual_service.create_wireframe(db, proyecto_id, wireframe_data)
+@router.post("/wireframes", response_model=diseno_conceptual_schema.WireframeResponse, summary="Subir un Wireframe", description="Sube un archivo como wireframe para la Fase 2")
+def create_wireframe(proyecto_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    return diseno_conceptual_service.create_wireframe(db, proyecto_id, file)
 
 
 # --- INVENTARIO ADICIONAL ---
