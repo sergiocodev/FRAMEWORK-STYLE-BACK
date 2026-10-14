@@ -28,7 +28,6 @@ class ArquetipoUsuario(Base):
     nombre = Column(String(120), nullable=False)
     etiqueta = Column(String(60), nullable=True)
     avatar_archivo_id = Column(BigInteger, ForeignKey("archivos.id", ondelete="SET NULL"), nullable=True)
-    avatar_url = Column(String(255), nullable=True)
     orden = Column(Integer, default=0)
 
     proyecto = relationship("Proyecto", back_populates="arquetipos")
