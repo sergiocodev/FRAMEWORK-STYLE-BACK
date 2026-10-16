@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from app.schemas.file_schema import ArchivoResponse
 
@@ -9,7 +9,7 @@ class InvestigacionInformeBase(BaseModel):
     objetivo: Optional[str] = None
     producto: Optional[str] = None
     expectativas: Optional[str] = None
-    referencias: Optional[List[Dict[str, Any]]] = None
+    referencias: Optional[Union[List[Dict[str, Any]], List[str], List[Any], Any]] = None
     analisis_actual: Optional[str] = None
     restricciones: Optional[str] = None
     identidad_marca: Optional[Dict[str, Any]] = None

@@ -1,6 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, text, BigInteger, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from app.models.diseno_conceptual_model import NodoPantalla
+from app.models.file_model import Archivo
 import enum
 
 class TipoAlerta(str, enum.Enum):

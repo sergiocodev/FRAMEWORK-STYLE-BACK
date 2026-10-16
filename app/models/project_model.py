@@ -38,3 +38,5 @@ class Proyecto(Base):
     cliente = relationship("Cliente", back_populates="proyectos")
     informe = relationship("InvestigacionInforme", back_populates="proyecto", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
     arquetipos = relationship("ArquetipoUsuario", back_populates="proyecto", cascade="all, delete-orphan", passive_deletes=True)
+    evaluacion_estetica = relationship("EvaluacionEstetica", back_populates="proyecto", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
+
