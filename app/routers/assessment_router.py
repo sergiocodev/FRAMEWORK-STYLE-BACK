@@ -10,7 +10,8 @@ from app.schemas.assessment_schema import (
     HallazgoCreate,
     HallazgoUpdate
 )
-from app.services import assessment_service
+from app.schemas.gestalt_tda_schema import GestaltTdaResponse, TdaApplyRequest
+from app.services import assessment_service, gestalt_tda_service
 
 router = APIRouter(
     prefix="/api/v1/proyectos/{proyecto_id}/assessment",
@@ -92,18 +93,23 @@ def sync_fase4(proyecto_id: int, db: Session = Depends(get_db)):
     assessment_service.sync_fase4_alertas_to_hallazgos(db, proyecto_id)
     return assessment_service.get_or_create_evaluacion(db, proyecto_id)
 
-@router.post("/auditar-ia", summary="Auditar Prototipos de Fase 4 con IA")
-async def auditar_con_ia(proyecto_id: int, db: Session = Depends(get_db)):
+@router.get("/gestalt-tda", response_model=GestaltTdaResponse, summary="Auditoría Topológica Gestalt (TDA)")
+@router.post("/gestalt-tda", response_model=GestaltTdaResponse, summary="Auditoría Topológica Gestalt (TDA)")
+def run_gestalt_tda(proyecto_id: int, pantalla_id: Optional[int] = None, db: Session = Depends(get_db)):
     """
-    Ejecuta un análisis visual profundo con IA (Gemini Vision) sobre los prototipos de la Fase 4,
-    evaluando principios Gestalt, estimando puntuaciones VisAWI y detectando anomalías visuales.
+    Ejecuta el modelo computacional de Gestalt mediante Homología Persistente (TDA),
+    calculando complejos Vietoris-Rips, diagramas 0-PD / 1-PD, Silhouette Scores y evaluando
+    las 5 heurísticas de percepción visual (Chen et al., 2025).
     """
-    resultado = await assessment_service.auditar_estetica_con_ia(db, proyecto_id)
-    evaluacion_actualizada = assessment_service.get_or_create_evaluacion(db, proyecto_id)
-    return {
-        "resultado": resultado,
-        "evaluacion": evaluacion_actualizada
-    }
+    return gestalt_tda_service.analizar_proyecto_gestalt_tda(db, proyecto_id, pantalla_id)
+
+@router.post("/gestalt-tda/aplicar", summary="Aplicar Diagnóstico Topológico a la Evaluación")
+def apply_gestalt_tda(proyecto_id: int, request: TdaApplyRequest, db: Session = Depends(get_db)):
+    """
+    Aplica las puntuaciones del análisis topológico al checklist heurístico de la Fase 5
+    e inyecta los defectos detectados en la Matriz de Hallazgos.
+    """
+    return gestalt_tda_service.aplicar_resultados_tda_a_evaluacion(db, proyecto_id, request)
 
 @router.get("/visawi-questionnaire", summary="Obtener Cuestionario VisAWI Oficial (18 Ítems)")
 def get_visawi_questionnaire():
