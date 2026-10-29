@@ -5,6 +5,7 @@ from typing import List
 from app.core.database import get_db
 from app.schemas import diseno_visual_schema as schemas
 from app.services import diseno_visual_service as service
+from app.services.mssboa_optimizer import MSSBOAOptimizer
 
 router = APIRouter(
     prefix="/api/diseno-visual",
@@ -80,3 +81,24 @@ def delete_icono(icon_id: int, db: Session = Depends(get_db)):
     if not icon:
         raise HTTPException(status_code=404, detail="Icon not found")
     return {"message": "Icon deleted"}
+
+@router.post("/{proyecto_id}/colores/batch", response_model=List[schemas.ColorItemResponse])
+def replace_colores_batch(proyecto_id: int, colores_in: List[schemas.ColorItemCreate], db: Session = Depends(get_db)):
+    return service.replace_colores(db, proyecto_id, colores_in)
+
+@router.post("/optimizador/mssboa", response_model=schemas.MSSBOAOptimizeResponse)
+def optimize_palette_mssboa(req: schemas.MSSBOAOptimizeRequest):
+    try:
+        optimizer = MSSBOAOptimizer(
+            base_hex=req.base_hex,
+            harmony_type=req.harmony_type or "Complementary",
+            mode=req.mode or "light",
+            wcag_target=req.wcag_target or "AA",
+            population_size=req.population_size or 30,
+            max_iterations=req.max_iterations or 50,
+            seed=req.seed
+        )
+        return optimizer.optimize()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en optimizador MSSBOA: {str(e)}")
+

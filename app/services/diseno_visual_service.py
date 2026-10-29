@@ -1,3 +1,4 @@
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models.diseno_visual_model import DisenoVisualConfig, ColorItem, TypographyItem, IconItem
 from app.schemas.diseno_visual_schema import (
@@ -50,6 +51,23 @@ def delete_color(db: Session, color_id: int):
         db.delete(color)
         db.commit()
     return color
+
+def replace_colores(db: Session, proyecto_id: int, colores_in: List[ColorItemCreate]):
+    # Borrar existentes de forma atómica
+    db.query(ColorItem).filter(ColorItem.proyecto_id == proyecto_id).delete()
+    
+    nuevos = []
+    for col_in in colores_in:
+        col_data = col_in.dict()
+        col_data["proyecto_id"] = proyecto_id
+        nuevo_color = ColorItem(**col_data)
+        db.add(nuevo_color)
+        nuevos.append(nuevo_color)
+        
+    db.commit()
+    for col in nuevos:
+        db.refresh(col)
+    return nuevos
 
 def get_tipografias(db: Session, proyecto_id: int):
     return db.query(TypographyItem).filter(TypographyItem.proyecto_id == proyecto_id).order_by(TypographyItem.orden).all()

@@ -88,3 +88,39 @@ class DisenoVisualCompletoResponse(BaseModel):
     colores: List[ColorItemResponse]
     tipografias: List[TypographyItemResponse]
     iconos: List[IconItemResponse]
+
+# MSSBOA Optimization Schemas
+class MSSBOAOptimizeRequest(BaseModel):
+    base_hex: str = "#2563EB"
+    harmony_type: Optional[str] = "Complementary"
+    mode: Optional[str] = "light"
+    wcag_target: Optional[str] = "AA"
+    population_size: Optional[int] = 30
+    max_iterations: Optional[int] = 50
+    seed: Optional[int] = None
+
+class MSSBOAOptimizedColor(BaseModel):
+    hex_code: str
+    nombre: str
+    token_name: str
+    uso: str
+    orden: int
+
+class MSSBOAAestheticMetrics(BaseModel):
+    contrast_score: float
+    harmony_score: float
+    diversity_score: float
+    fitness_score: float
+    min_contrast: float
+    wcag_compliant: bool
+    harmony_template: str
+    theme_mode: str
+
+class MSSBOAOptimizeResponse(BaseModel):
+    colores: List[MSSBOAOptimizedColor]
+    metrics: MSSBOAAestheticMetrics
+    iterations: int
+    population_size: int
+    execution_time_ms: float
+    convergence_history: List[float]
+
