@@ -1,0 +1,40 @@
+{
+    "nombre_modelo": "Calista_EfficientNetB0_GUI",
+    "archivo_pesos": "calista_efficientnet_best.keras",
+    "resolucion_entrada": [
+        360,
+        480,
+        3
+    ],
+    "rango_entrada": [
+        0.0,
+        1.0
+    ],
+    "rango_salida_escala": [
+        1.0,
+        7.0
+    ],
+    "arquitectura": {
+        "backbone": "EfficientNetB0 (ImageNet)",
+        "capas_extraccion": [
+            "block5c_add (22x30x112)",
+            "top_activation (11x15x1280)"
+        ],
+        "atencion_espacial": true,
+        "dimension_vector_fusionado": 3152,
+        "total_parametros": 4525701
+    },
+    "entrenamiento": {
+        "muestras_entrenamiento": 204,
+        "muestras_validacion": 51,
+        "epocas_ejecutadas_fase1": 25,
+        "epocas_ejecutadas_fase2": 10,
+        "funcion_perdida": "Huber(delta=1.0)"
+    },
+    "metricas_validacion": {
+        "MAE": 0.5268,
+        "RMSE": 0.6912,
+        "Pearson_PLCC": 0.7853,
+        "Spearman_SRCC": 0.7543
+    }
+}

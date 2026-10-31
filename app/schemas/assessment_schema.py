@@ -74,6 +74,7 @@ class EvaluacionUpdate(BaseModel):
     conclusion_texto: Optional[str] = None
     checklist: Optional[Union[List[ChecklistItemSchema], List[Dict[str, Any]], Dict[str, Any], Any]] = None
     visawi_metricas: Optional[Union[List[VisawiMetricaSchema], List[Dict[str, Any]], Dict[str, Any], Any]] = None
+    calista_metricas: Optional[Union[Dict[str, Any], Any]] = None
     justificaciones: Optional[Union[List[str], Dict[str, Any], Any]] = None
 
 # Pantallas Fase 4 resumidas para Fase 5
@@ -99,6 +100,7 @@ class EvaluacionResponse(BaseModel):
     conclusion_texto: Optional[str] = None
     checklist: Optional[Union[List[Any], Dict[str, Any], Any]] = None
     visawi_metricas: Optional[Union[List[Any], Dict[str, Any], Any]] = None
+    calista_metricas: Optional[Union[Dict[str, Any], Any]] = None
     justificaciones: Optional[Union[List[str], Dict[str, Any], Any]] = None
     creado_en: Optional[datetime] = None
     actualizado_en: Optional[datetime] = None

@@ -11,7 +11,8 @@ from app.schemas.assessment_schema import (
     HallazgoUpdate
 )
 from app.schemas.gestalt_tda_schema import GestaltTdaResponse, TdaApplyRequest
-from app.services import assessment_service, gestalt_tda_service
+from app.schemas.calista_schema import CalistaEvaluacionResponse, CalistaApplyRequest, CalistaModeloInfo
+from app.services import assessment_service, gestalt_tda_service, calista_service
 
 router = APIRouter(
     prefix="/api/v1/proyectos/{proyecto_id}/assessment",
@@ -159,5 +160,44 @@ def get_visawi_questionnaire():
         ],
         "items": assessment_service.DEFAULT_VISAWI_ITEMS
     }
+
+@router.get("/calista/modelos", response_model=List[CalistaModeloInfo], summary="Listar Modelos Neuronales Calista")
+def get_calista_models():
+    """
+    Lista todos los modelos neuronales disponibles en app/ml_models con sus metadatos.
+    """
+    return calista_service.listar_modelos_calista()
+
+@router.get("/calista", response_model=CalistaEvaluacionResponse, summary="Obtener Evaluación Calista AI")
+def get_calista_evaluation(
+    proyecto_id: int,
+    pantalla_id: Optional[int] = None,
+    modelo_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene la evaluación estética calculada por el modelo Calista para las pantallas de Fase 4.
+    Permite seleccionar el modelo de inferencia (MobileNetV3, estetic_559.h5, etc.).
+    """
+    return calista_service.analizar_proyecto_calista(db, proyecto_id, pantalla_id, modelo_id)
+
+@router.post("/calista/analizar", response_model=CalistaEvaluacionResponse, summary="Ejecutar Inferencia Calista")
+def run_calista_inference(
+    proyecto_id: int,
+    pantalla_id: Optional[int] = None,
+    modelo_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Ejecuta la inferencia neuronal sobre la pantalla seleccionada de Fase 4 usando el modelo seleccionado.
+    """
+    return calista_service.analizar_proyecto_calista(db, proyecto_id, pantalla_id, modelo_id)
+
+@router.post("/calista/aplicar", summary="Aplicar Hallazgo Calista a la Matriz")
+def apply_calista_finding(proyecto_id: int, request: CalistaApplyRequest, db: Session = Depends(get_db)):
+    """
+    Inyecta un hallazgo sugerido por el modelo Calista en la Matriz Central de Hallazgos del proyecto.
+    """
+    return calista_service.aplicar_calista_hallazgo_a_evaluacion(db, proyecto_id, request)
 
 

@@ -17,6 +17,7 @@ class EvaluacionEstetica(Base):
 
     checklist = Column(JSON, nullable=True)
     visawi_metricas = Column(JSON, nullable=True)
+    calista_metricas = Column(JSON, nullable=True)
     justificaciones = Column(JSON, nullable=True)
 
     creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
