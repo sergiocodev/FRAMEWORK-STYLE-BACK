@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, text, BigInteger, ForeignKey, Text, JSON, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, text, BigInteger, ForeignKey, Text, JSON, Boolean, Float
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -25,6 +25,7 @@ class EvaluacionEstetica(Base):
 
     proyecto = relationship("Proyecto", back_populates="evaluacion_estetica")
     hallazgos = relationship("EvaluacionHallazgo", back_populates="evaluacion", cascade="all, delete-orphan", order_by="EvaluacionHallazgo.id.desc()")
+    visawi_encuestas = relationship("EvaluacionVisawiEncuesta", back_populates="evaluacion", cascade="all, delete-orphan", order_by="EvaluacionVisawiEncuesta.id.desc()")
 
 
 class EvaluacionHallazgo(Base):
@@ -40,3 +41,23 @@ class EvaluacionHallazgo(Base):
     creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
     evaluacion = relationship("EvaluacionEstetica", back_populates="hallazgos")
+
+
+class EvaluacionVisawiEncuesta(Base):
+    __tablename__ = "evaluacion_visawi_encuestas"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    evaluacion_id = Column(BigInteger, ForeignKey("evaluaciones_esteticas.id", ondelete="CASCADE"), nullable=False)
+    evaluador_nombre = Column(String(150), default="Evaluador Anónimo")
+    evaluador_rol = Column(String(100), default="Evaluador UX")
+    respuestas = Column(JSON, nullable=False)  # Diccionario con ítems { "1": 5, "2": 6, ... }
+    score_simplicidad = Column(Float, nullable=False, default=5.0)
+    score_claridad = Column(Float, nullable=False, default=5.0)
+    score_diversidad = Column(Float, nullable=False, default=5.0)
+    score_armonia = Column(Float, nullable=False, default=5.0)
+    score_global = Column(Float, nullable=False, default=5.0)
+    creado_en = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+
+    evaluacion = relationship("EvaluacionEstetica", back_populates="visawi_encuestas")
+
+

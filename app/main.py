@@ -38,6 +38,7 @@ app.include_router(diseno_detallado_router.router)
 app.include_router(diseno_detallado_pantallas_router.router)
 app.include_router(client_router.router)
 app.include_router(assessment_router.router)
+app.include_router(assessment_router.public_router)
 
 
 @app.get("/")

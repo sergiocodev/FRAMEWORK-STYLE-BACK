@@ -1,8 +1,14 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
-from app.models.assessment_model import EvaluacionEstetica, EvaluacionHallazgo
-from app.schemas.assessment_schema import EvaluacionUpdate, HallazgoCreate, HallazgoUpdate, ChecklistItemUpdate
-from typing import Optional, List
+from app.models.assessment_model import EvaluacionEstetica, EvaluacionHallazgo, EvaluacionVisawiEncuesta
+from app.schemas.assessment_schema import (
+    EvaluacionUpdate,
+    HallazgoCreate,
+    HallazgoUpdate,
+    ChecklistItemUpdate,
+    VisawiEncuestaRespuestaInput
+)
+from typing import Optional, List, Dict, Any
 
 DEFAULT_SUBCRITERIOS_MAP = {
     "c1": [
@@ -447,6 +453,111 @@ def normalizar_justificaciones(just_raw) -> List[str]:
         return [f"{str(k).replace('_', ' ').title()}: {v}" for k, v in just_raw.items()]
     return [str(just_raw)]
 
+DIMENSION_ITEMS = {
+    "Simplicidad": [1, 2, 3, 4, 5],
+    "Claridad": [6, 7, 8, 9],
+    "Diversidad": [10, 11, 12, 13, 14],
+    "Armonía": [15, 16, 17, 18]
+}
+
+def calcular_scores_visawi_desde_respuestas(respuestas: dict) -> dict:
+    """
+    Calcula los puntajes de las 4 subescalas y el score global a partir de las respuestas Likert (1..7).
+    Aplica inversión psicométrica oficial: score = 8 - rating para ítems negativos.
+    """
+    scores_ajustados = {}
+
+    for item in DEFAULT_VISAWI_ITEMS:
+        i_id = item["id"]
+        raw_val = respuestas.get(i_id, respuestas.get(str(i_id), 4))
+        try:
+            val = float(raw_val)
+        except (ValueError, TypeError):
+            val = 4.0
+        val = max(1.0, min(7.0, val))
+
+        if item.get("inverso"):
+            scores_ajustados[i_id] = 8.0 - val
+        else:
+            scores_ajustados[i_id] = val
+
+    # Subescalas
+    dim_scores = {}
+    for dim, item_ids in DIMENSION_ITEMS.items():
+        vals = [scores_ajustados.get(i, 4.0) for i in item_ids]
+        dim_scores[dim] = round(sum(vals) / len(vals), 2)
+
+    score_global = round(sum(dim_scores.values()) / len(dim_scores), 2)
+
+    return {
+        "scores_ajustados": scores_ajustados,
+        "Simplicidad": dim_scores["Simplicidad"],
+        "Claridad": dim_scores["Claridad"],
+        "Diversidad": dim_scores["Diversidad"],
+        "Armonía": dim_scores["Armonía"],
+        "score_global": score_global
+    }
+
+def actualizar_metricas_visawi_desde_bd(db: Session, evaluacion: EvaluacionEstetica, commit: bool = True):
+    """
+    Recalcula las métricas de VisAWI consolidadas en base a las encuestas reales guardadas en la base de datos.
+    """
+    todas_encuestas = db.query(EvaluacionVisawiEncuesta).filter(
+        EvaluacionVisawiEncuesta.evaluacion_id == evaluacion.id
+    ).all()
+
+    if todas_encuestas:
+        n = len(todas_encuestas)
+        avg_simp = round(sum(e.score_simplicidad for e in todas_encuestas) / n, 1)
+        avg_clar = round(sum(e.score_claridad for e in todas_encuestas) / n, 1)
+        avg_div = round(sum(e.score_diversidad for e in todas_encuestas) / n, 1)
+        avg_arm = round(sum(e.score_armonia for e in todas_encuestas) / n, 1)
+
+        targets_actuales = {}
+        if isinstance(evaluacion.visawi_metricas, list):
+            for m in evaluacion.visawi_metricas:
+                if isinstance(m, dict) and "dimension" in m:
+                    targets_actuales[m["dimension"]] = m.get("target", 6.0)
+
+        evaluacion.visawi_metricas = [
+            {
+                "dimension": "Simplicidad",
+                "puntaje": avg_simp,
+                "target": targets_actuales.get("Simplicidad", 6.0),
+                "reactivo": DEFAULT_REACTIVOS_MAP["Simplicidad"]
+            },
+            {
+                "dimension": "Claridad",
+                "puntaje": avg_clar,
+                "target": targets_actuales.get("Claridad", 6.0),
+                "reactivo": DEFAULT_REACTIVOS_MAP["Claridad"]
+            },
+            {
+                "dimension": "Diversidad",
+                "puntaje": avg_div,
+                "target": targets_actuales.get("Diversidad", 5.5),
+                "reactivo": DEFAULT_REACTIVOS_MAP["Diversidad"]
+            },
+            {
+                "dimension": "Armonía",
+                "puntaje": avg_arm,
+                "target": targets_actuales.get("Armonía", 6.0),
+                "reactivo": DEFAULT_REACTIVOS_MAP["Armonía"]
+            }
+        ]
+        flag_modified(evaluacion, "visawi_metricas")
+        evaluacion.respuestas_completadas = n
+        if evaluacion.total_respuestas < n:
+            evaluacion.total_respuestas = n
+    else:
+        evaluacion.visawi_metricas = normalizar_visawi(evaluacion.visawi_metricas)
+        flag_modified(evaluacion, "visawi_metricas")
+
+    recalcular_justificaciones(evaluacion)
+    if commit:
+        db.commit()
+        db.refresh(evaluacion)
+
 def get_or_create_evaluacion(db: Session, proyecto_id: int) -> EvaluacionEstetica:
     evaluacion = db.query(EvaluacionEstetica).filter(EvaluacionEstetica.proyecto_id == proyecto_id).first()
     if not evaluacion:
@@ -456,7 +567,7 @@ def get_or_create_evaluacion(db: Session, proyecto_id: int) -> EvaluacionEstetic
             estado="en_proceso",
             encuesta_url=f"https://style-eval.com/survey/proj-{proyecto_id}",
             total_respuestas=30,
-            respuestas_completadas=30,
+            respuestas_completadas=0,
             conclusion_estado="Requiere Ajustes",
             conclusion_texto="Se detectaron 1 hallazgo(s) crítico(s) pendientes de resolver antes de la aprobación.",
             checklist=DEFAULT_CHECKLIST,
@@ -500,24 +611,32 @@ def get_or_create_evaluacion(db: Session, proyecto_id: int) -> EvaluacionEstetic
             flag_modified(evaluacion, "checklist")
             changed = True
 
-        needs_visawi_norm = False
-        if isinstance(evaluacion.visawi_metricas, dict) or not evaluacion.visawi_metricas:
-            needs_visawi_norm = True
-        elif isinstance(evaluacion.visawi_metricas, list):
-            # Debe tener exactamente las 4 dimensiones de VISAWIdev.xlsx
-            dims_presentes = [m.get("dimension") for m in evaluacion.visawi_metricas if isinstance(m, dict)]
-            if len(evaluacion.visawi_metricas) != 4 or set(dims_presentes) != {"Simplicidad", "Claridad", "Diversidad", "Armonía"}:
-                needs_visawi_norm = True
-            else:
-                for m in evaluacion.visawi_metricas:
-                    if isinstance(m, dict) and ("target" not in m or "reactivo" not in m):
-                        needs_visawi_norm = True
-                        break
-        if needs_visawi_norm:
-            evaluacion.visawi_metricas = normalizar_visawi(evaluacion.visawi_metricas)
-            flag_modified(evaluacion, "visawi_metricas")
-            recalcular_justificaciones(evaluacion)
+        # Si existen encuestas reales en la base de datos, sincronizar los promedios reales
+        encuestas_reales = db.query(EvaluacionVisawiEncuesta).filter(
+            EvaluacionVisawiEncuesta.evaluacion_id == evaluacion.id
+        ).all()
+        if encuestas_reales:
+            actualizar_metricas_visawi_desde_bd(db, evaluacion, commit=False)
             changed = True
+        else:
+            needs_visawi_norm = False
+            if isinstance(evaluacion.visawi_metricas, dict) or not evaluacion.visawi_metricas:
+                needs_visawi_norm = True
+            elif isinstance(evaluacion.visawi_metricas, list):
+                dims_presentes = [m.get("dimension") for m in evaluacion.visawi_metricas if isinstance(m, dict)]
+                if len(evaluacion.visawi_metricas) != 4 or set(dims_presentes) != {"Simplicidad", "Claridad", "Diversidad", "Armonía"}:
+                    needs_visawi_norm = True
+                else:
+                    for m in evaluacion.visawi_metricas:
+                        if isinstance(m, dict) and ("target" not in m or "reactivo" not in m):
+                            needs_visawi_norm = True
+                            break
+            if needs_visawi_norm:
+                evaluacion.visawi_metricas = normalizar_visawi(evaluacion.visawi_metricas)
+                flag_modified(evaluacion, "visawi_metricas")
+                recalcular_justificaciones(evaluacion)
+                changed = True
+
         if isinstance(evaluacion.justificaciones, dict):
             evaluacion.justificaciones = normalizar_justificaciones(evaluacion.justificaciones)
             flag_modified(evaluacion, "justificaciones")
@@ -525,7 +644,6 @@ def get_or_create_evaluacion(db: Session, proyecto_id: int) -> EvaluacionEstetic
         
         if changed:
             db.commit()
-            db.refresh(evaluacion)
             db.refresh(evaluacion)
 
     # Calcular score global, nivel de madurez y adjuntar pantallas de Fase 4
@@ -535,6 +653,67 @@ def get_or_create_evaluacion(db: Session, proyecto_id: int) -> EvaluacionEstetic
     evaluacion.pantallas_fase4 = get_pantallas_fase4_summary(db, proyecto_id)
 
     return evaluacion
+
+def registrar_respuesta_visawi(db: Session, proyecto_id: int, payload: VisawiEncuestaRespuestaInput) -> EvaluacionEstetica:
+    """
+    Guarda en la base de datos MySQL una respuesta real al cuestionario oficial VisAWI (18 reactivos).
+    Recalcula las subescalas psicométricas considerando los ítems inversos y actualiza la evaluación global.
+    """
+    evaluacion = get_or_create_evaluacion(db, proyecto_id)
+
+    if payload.reiniciar_muestra:
+        db.query(EvaluacionVisawiEncuesta).filter(
+            EvaluacionVisawiEncuesta.evaluacion_id == evaluacion.id
+        ).delete()
+        db.commit()
+
+    calculo = calcular_scores_visawi_desde_respuestas(payload.respuestas)
+    respuestas_clean = {str(k): int(v) for k, v in payload.respuestas.items()}
+
+    nueva_encuesta = EvaluacionVisawiEncuesta(
+        evaluacion_id=evaluacion.id,
+        evaluador_nombre=payload.evaluador_nombre or "Participante Anónimo",
+        evaluador_rol=payload.evaluador_rol or "Participante Anónimo",
+        respuestas=respuestas_clean,
+        score_simplicidad=calculo["Simplicidad"],
+        score_claridad=calculo["Claridad"],
+        score_diversidad=calculo["Diversidad"],
+        score_armonia=calculo["Armonía"],
+        score_global=calculo["score_global"]
+    )
+    db.add(nueva_encuesta)
+    db.commit()
+    db.refresh(nueva_encuesta)
+
+    # Actualizar promedios y justificaciones en la evaluación principal
+    actualizar_metricas_visawi_desde_bd(db, evaluacion, commit=True)
+    return get_or_create_evaluacion(db, proyecto_id)
+
+def eliminar_respuesta_visawi(db: Session, proyecto_id: int, encuesta_id: int) -> EvaluacionEstetica:
+    """
+    Elimina una encuesta de VisAWI registrada y recalcula los promedios globales.
+    """
+    evaluacion = get_or_create_evaluacion(db, proyecto_id)
+    encuesta = db.query(EvaluacionVisawiEncuesta).filter(
+        EvaluacionVisawiEncuesta.id == encuesta_id,
+        EvaluacionVisawiEncuesta.evaluacion_id == evaluacion.id
+    ).first()
+    if encuesta:
+        db.delete(encuesta)
+        db.commit()
+
+    actualizar_metricas_visawi_desde_bd(db, evaluacion, commit=True)
+    return get_or_create_evaluacion(db, proyecto_id)
+
+def listar_encuestas_visawi(db: Session, proyecto_id: int) -> List[EvaluacionVisawiEncuesta]:
+    """
+    Retorna la lista de todas las encuestas VisAWI registradas en la base de datos para este proyecto.
+    """
+    evaluacion = get_or_create_evaluacion(db, proyecto_id)
+    return db.query(EvaluacionVisawiEncuesta).filter(
+        EvaluacionVisawiEncuesta.evaluacion_id == evaluacion.id
+    ).order_by(EvaluacionVisawiEncuesta.id.desc()).all()
+
 
 def update_evaluacion(db: Session, proyecto_id: int, eval_in: EvaluacionUpdate) -> EvaluacionEstetica:
     evaluacion = get_or_create_evaluacion(db, proyecto_id)
@@ -960,4 +1139,114 @@ No devuelvas explicaciones fuera del bloque JSON."""
         "mensaje": "Auditoría heurística completada. Se sincronizaron las alertas y estándares visuales de las pantallas de Fase 4.",
         "dictamen": evaluacion.conclusion_texto
     }
+
+# -------------------------------------------------------------
+# SERVICIOS PARA ENCUESTA PÚBLICA VISAWI DESATENDIDA (OPCIÓN B)
+# -------------------------------------------------------------
+def get_public_visawi_survey(db: Session, proyecto_id: int) -> dict:
+    from app.models.project_model import Proyecto
+    from fastapi import HTTPException
+
+    proyecto = db.query(Proyecto).filter(Proyecto.id == proyecto_id).first()
+    if not proyecto:
+        raise HTTPException(status_code=404, detail=f"Proyecto con ID {proyecto_id} no encontrado")
+
+    pantallas_res = get_pantallas_fase4_summary(db, proyecto_id)
+    pantallas_public = []
+    for p in pantallas_res:
+        if isinstance(p, dict):
+            pantallas_public.append({
+                "id": p.get("id"),
+                "nombre_pantalla": p.get("nombre_pantalla", "Pantalla"),
+                "archivo_url": p.get("archivo_url"),
+                "estado_diseno": p.get("estado_diseno", "aprobado")
+            })
+        else:
+            pantallas_public.append({
+                "id": getattr(p, "id", 0),
+                "nombre_pantalla": getattr(p, "nombre_pantalla", "Pantalla"),
+                "archivo_url": getattr(p, "archivo_url", None),
+                "estado_diseno": getattr(p, "estado_diseno", "aprobado")
+            })
+
+
+    dimensiones_info = [
+        {
+            "nombre": "Simplicidad",
+            "descripcion": "Facilidad de uso, claridad en la jerarquía y ausencia de elementos superfluos que saturen la percepción.",
+            "items_count": 5
+        },
+        {
+            "nombre": "Claridad",
+            "descripcion": "Grado en el que el diseño se comprende de inmediato, transmite profesionalismo y orden estructurado.",
+            "items_count": 4
+        },
+        {
+            "nombre": "Diversidad",
+            "descripcion": "Variedad, agilidad visual, creatividad y dinamismo que mantienen cautivo el interés del usuario.",
+            "items_count": 5
+        },
+        {
+            "nombre": "Armonía",
+            "descripcion": "Cohesión estética global, balance equilibrado y compatibilidad cromática de todos los componentes.",
+            "items_count": 4
+        }
+    ]
+
+    escala_likert = [
+        {"valor": 1, "etiqueta": "Totalmente en desacuerdo", "corta": "TD (1)"},
+        {"valor": 2, "etiqueta": "En desacuerdo", "corta": "D (2)"},
+        {"valor": 3, "etiqueta": "Ligeramente en desacuerdo", "corta": "LD (3)"},
+        {"valor": 4, "etiqueta": "Neutral", "corta": "N (4)"},
+        {"valor": 5, "etiqueta": "Ligeramente de acuerdo", "corta": "LA (5)"},
+        {"valor": 6, "etiqueta": "De acuerdo", "corta": "A (6)"},
+        {"valor": 7, "etiqueta": "Totalmente de acuerdo", "corta": "TA (7)"}
+    ]
+
+    return {
+        "proyecto_id": proyecto.id,
+        "proyecto_nombre": proyecto.nombre,
+        "proyecto_tipo": proyecto.tipo.value if hasattr(proyecto.tipo, "value") else str(proyecto.tipo),
+        "pantallas": pantallas_public,
+        "dimensiones": dimensiones_info,
+        "items": DEFAULT_VISAWI_ITEMS,
+        "escala": escala_likert
+    }
+
+def registrar_respuesta_visawi_publica(db: Session, proyecto_id: int, payload: VisawiEncuestaRespuestaInput) -> dict:
+    from fastapi import HTTPException
+    
+    # Asegurar que la evaluación exista
+    evaluacion = get_or_create_evaluacion(db, proyecto_id)
+    
+    # Validar que payload contenga respuestas para los 18 reactivos
+    respuestas = payload.respuestas or {}
+    if len(respuestas) < 18:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cuestionario incompleto: se respondieron {len(respuestas)} de 18 reactivos obligatorios."
+        )
+
+    # Llamar al registro psicométrico oficial (calcula inversión y actualiza promedios en BD)
+    eval_actualizada = registrar_respuesta_visawi(db, proyecto_id, payload)
+    
+    # Obtener la última encuesta guardada
+    ultima_encuesta = db.query(EvaluacionVisawiEncuesta).filter(
+        EvaluacionVisawiEncuesta.evaluacion_id == evaluacion.id
+    ).order_by(EvaluacionVisawiEncuesta.id.desc()).first()
+
+    return {
+        "success": True,
+        "mensaje": "¡Muchas gracias! Tu evaluación estética VisAWI ha sido registrada con éxito.",
+        "encuesta_id": ultima_encuesta.id if ultima_encuesta else 0,
+        "evaluador_nombre": ultima_encuesta.evaluador_nombre if ultima_encuesta else "Participante Anónimo",
+        "evaluador_rol": ultima_encuesta.evaluador_rol if ultima_encuesta else "Participante Anónimo",
+        "score_simplicidad": ultima_encuesta.score_simplicidad if ultima_encuesta else 0.0,
+        "score_claridad": ultima_encuesta.score_claridad if ultima_encuesta else 0.0,
+        "score_diversidad": ultima_encuesta.score_diversidad if ultima_encuesta else 0.0,
+        "score_armonia": ultima_encuesta.score_armonia if ultima_encuesta else 0.0,
+        "score_global": ultima_encuesta.score_global if ultima_encuesta else 0.0,
+        "total_evaluaciones_proyecto": len(eval_actualizada.visawi_encuestas) if eval_actualizada.visawi_encuestas else 1
+    }
+
 

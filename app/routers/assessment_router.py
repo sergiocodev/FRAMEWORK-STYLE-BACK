@@ -8,7 +8,11 @@ from app.schemas.assessment_schema import (
     ChecklistItemUpdate,
     HallazgoResponse,
     HallazgoCreate,
-    HallazgoUpdate
+    HallazgoUpdate,
+    VisawiEncuestaRespuestaInput,
+    VisawiEncuestaResponse,
+    VisawiPublicSurveyInfo,
+    VisawiPublicSubmissionResponse
 )
 from app.schemas.gestalt_tda_schema import GestaltTdaResponse, TdaApplyRequest
 from app.schemas.calista_schema import CalistaEvaluacionResponse, CalistaApplyRequest, CalistaModeloInfo
@@ -18,6 +22,28 @@ router = APIRouter(
     prefix="/api/v1/proyectos/{proyecto_id}/assessment",
     tags=["Fase 5: Evaluación Estética"]
 )
+
+public_router = APIRouter(
+    prefix="/api/v1/public/visawi-survey",
+    tags=["Encuesta Pública VisAWI"]
+)
+
+@public_router.get("/{proyecto_id}", response_model=VisawiPublicSurveyInfo, summary="Obtener Datos de la Encuesta Pública VisAWI")
+def get_public_survey_info(proyecto_id: int, db: Session = Depends(get_db)):
+    """
+    Obtiene los datos públicos del proyecto, las capturas de pantalla de Fase 4 y los 18 ítems VisAWI.
+    No requiere autenticación.
+    """
+    return assessment_service.get_public_visawi_survey(db, proyecto_id)
+
+@public_router.post("/{proyecto_id}/respuestas", response_model=VisawiPublicSubmissionResponse, summary="Enviar Respuestas de Encuesta Pública VisAWI")
+def submit_public_survey_response(proyecto_id: int, payload: VisawiEncuestaRespuestaInput, db: Session = Depends(get_db)):
+    """
+    Registra las respuestas de un participante externo anónimo o evaluador, actualiza las métricas en BD.
+    No requiere autenticación.
+    """
+    return assessment_service.registrar_respuesta_visawi_publica(db, proyecto_id, payload)
+
 
 @router.get("", response_model=EvaluacionResponse, summary="Obtener Evaluación Estética")
 def get_assessment(proyecto_id: int, db: Session = Depends(get_db)):
@@ -160,6 +186,29 @@ def get_visawi_questionnaire():
         ],
         "items": assessment_service.DEFAULT_VISAWI_ITEMS
     }
+
+@router.post("/visawi/respuestas", response_model=EvaluacionResponse, summary="Registrar Respuestas de Encuesta VisAWI en BD")
+def submit_visawi_response(proyecto_id: int, payload: VisawiEncuestaRespuestaInput, db: Session = Depends(get_db)):
+    """
+    Recibe las respuestas de un evaluador a los 18 ítems del cuestionario VisAWI,
+    calcula las subescalas con inversión psicométrica oficial, las almacena en MySQL
+    y actualiza la evaluación global del proyecto.
+    """
+    return assessment_service.registrar_respuesta_visawi(db, proyecto_id, payload)
+
+@router.get("/visawi/respuestas", response_model=List[VisawiEncuestaResponse], summary="Listar Encuestas VisAWI Registradas en BD")
+def list_visawi_responses(proyecto_id: int, db: Session = Depends(get_db)):
+    """
+    Lista el histórico de encuestas y evaluaciones VisAWI guardadas en la base de datos para el proyecto.
+    """
+    return assessment_service.listar_encuestas_visawi(db, proyecto_id)
+
+@router.delete("/visawi/respuestas/{encuesta_id}", response_model=EvaluacionResponse, summary="Eliminar una Encuesta VisAWI Registrada")
+def delete_visawi_response(proyecto_id: int, encuesta_id: int, db: Session = Depends(get_db)):
+    """
+    Elimina una encuesta de VisAWI registrada y recalcula los promedios globales de la base de datos.
+    """
+    return assessment_service.eliminar_respuesta_visawi(db, proyecto_id, encuesta_id)
 
 @router.get("/calista/modelos", response_model=List[CalistaModeloInfo], summary="Listar Modelos Neuronales Calista")
 def get_calista_models():

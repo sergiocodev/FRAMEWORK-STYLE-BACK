@@ -37,6 +37,28 @@ class VisawiMetricaSchema(BaseModel):
     target: Optional[float] = 4.5
     reactivo: Optional[str] = None
 
+class VisawiEncuestaRespuestaInput(BaseModel):
+    evaluador_nombre: Optional[str] = "Evaluador Anónimo"
+    evaluador_rol: Optional[str] = "Evaluador UX"
+    respuestas: Dict[int, int]  # Reactivo ID (1..18) -> Puntuación Likert (1..7)
+    reiniciar_muestra: Optional[bool] = False
+
+class VisawiEncuestaResponse(BaseModel):
+    id: int
+    evaluacion_id: int
+    evaluador_nombre: str
+    evaluador_rol: str
+    respuestas: Dict[str, Any]
+    score_simplicidad: float
+    score_claridad: float
+    score_diversidad: float
+    score_armonia: float
+    score_global: float
+    creado_en: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # Hallazgos
 class HallazgoBase(BaseModel):
     problema: str
@@ -110,6 +132,48 @@ class EvaluacionResponse(BaseModel):
     score_estetico: Optional[float] = 0.0
     nivel_madurez: Optional[str] = "En Evaluación"
     pantallas_fase4: List[PantallaFase4Item] = []
+    visawi_encuestas: List[VisawiEncuestaResponse] = []
 
     class Config:
         from_attributes = True
+
+# Schemas para Encuesta Pública VisAWI Desatendida (Opción B)
+class VisawiPublicScreenItem(BaseModel):
+    id: int
+    nombre_pantalla: str
+    archivo_url: Optional[str] = None
+    estado_diseno: Optional[str] = "aprobado"
+
+class VisawiPublicQuestionnaireItem(BaseModel):
+    id: int
+    dimension: str
+    pregunta: str
+    inverso: bool = False
+
+class VisawiPublicDimensionInfo(BaseModel):
+    nombre: str
+    descripcion: str
+    items_count: int
+
+class VisawiPublicSurveyInfo(BaseModel):
+    proyecto_id: int
+    proyecto_nombre: str
+    proyecto_tipo: Optional[str] = None
+    pantallas: List[VisawiPublicScreenItem] = []
+    dimensiones: List[VisawiPublicDimensionInfo] = []
+    items: List[VisawiPublicQuestionnaireItem] = []
+    escala: List[Dict[str, Any]] = []
+
+class VisawiPublicSubmissionResponse(BaseModel):
+    success: bool
+    mensaje: str
+    encuesta_id: int
+    evaluador_nombre: str
+    evaluador_rol: str
+    score_simplicidad: float
+    score_claridad: float
+    score_diversidad: float
+    score_armonia: float
+    score_global: float
+    total_evaluaciones_proyecto: int
+
