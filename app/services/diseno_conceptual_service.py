@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import uuid
 import shutil
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ def create_nodo(db: Session, proyecto_id: int, nodo_data: NodoPantallaCreate):
         descripcion=nodo_data.descripcion,
         pos_x=nodo_data.pos_x,
         pos_y=nodo_data.pos_y,
+        prioridad=nodo_data.prioridad,
         estado_verificacion=nodo_data.estado_verificacion,
         enlace_diseno_externo=nodo_data.enlace_diseno_externo
     )
@@ -135,7 +137,7 @@ def create_contenido_inventario(db: Session, proyecto_id: int, contenido_data: C
 def get_wireframes(db: Session, proyecto_id: int):
     return db.query(Wireframe).filter(Wireframe.proyecto_id == proyecto_id).all()
 
-def create_wireframe(db: Session, proyecto_id: int, file: UploadFile):
+def create_wireframe(db: Session, proyecto_id: int, file: UploadFile, nodo_id: Optional[int] = None):
     from app.models.file_model import Archivo
     import uuid
     import shutil
@@ -164,6 +166,7 @@ def create_wireframe(db: Session, proyecto_id: int, file: UploadFile):
     new_wireframe = Wireframe(
         proyecto_id=proyecto_id,
         archivo_id=nuevo_archivo.id,
+        nodo_id=nodo_id,
         version="v1",
         generado_por_ia=False
     )
@@ -218,6 +221,16 @@ def delete_contenido_inventario(db: Session, item_id: int):
     return {"message": "Item de inventario eliminado"}
 
 # --- WIREFRAMES ADICIONAL ---
+
+def update_wireframe(db: Session, wireframe_id: int, nodo_id: Optional[int] = None):
+    wireframe = db.query(Wireframe).filter(Wireframe.id == wireframe_id).first()
+    if not wireframe:
+        raise HTTPException(status_code=404, detail="Wireframe no encontrado")
+    wireframe.nodo_id = nodo_id
+    db.commit()
+    db.refresh(wireframe)
+    return wireframe
+
 def delete_wireframe(db: Session, wireframe_id: int):
     wireframe = db.query(Wireframe).filter(Wireframe.id == wireframe_id).first()
     if not wireframe:
@@ -269,17 +282,18 @@ def get_project_checklist(db: Session, proyecto_id: int):
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(settings.GEMINI_MODEL)
                 
-                prompt = f'''Eres un analista de UX/UI evaluando un diseo conceptual de sistema (baja fidelidad). Tu tarea es generar un checklist estrictamente basado en la investigación proporcionada.
-                
-                REGLAS CRÍTICAS:
-                1. NO inventes funcionalidades. Traduce ÚNICAMENTE lo que está explícitamente escrito en el contexto a ítems de interfaz. Si la investigación tiene 2 datos, genera 2 o 3 ítems.
-                2. Es un checklist del diseo conceptual general del sistema (estructura y flujos clave), no de diseño final.
-                3. Cada ítem debe ser una condición accionable y corta referida a TODO el sistema en conjunto (ej. "El sistema incluye la navegación al inventario").
-                
-                Devuelve ESTRÍCTAMENTE un array JSON de strings.
-                
-                Contexto de Investigación:
-                {context}'''
+                prompt = f'''Eres un arquitecto de información y evaluador UX enfocado EXCLUSIVAMENTE en WIREFRAMES Y BOCETOS DE BAJA FIDELIDAD (escala de grises, estructura conceptual). Tu tarea es generar un checklist de validación estructural basado estrictamente en la investigación de Fase 1.
+
+REGLAS CRÍTICAS Y OBLIGATORIAS:
+1. ENFOQUE EXCLUSIVO EN BAJA FIDELIDAD: El checklist debe evaluar ÚNICAMENTE la distribución de bloques de contenido, estructura de navegación y presencia de componentes funcionales básicos (cajas de formulario, botones de acción primarios, listados de datos, modales de confirmación o zonas de búsqueda).
+2. PROHIBIDO TOTALMENTE mencionar colores, paletas cromáticas, tipografías específicas, sombras, estilos decorativos o estética visual (eso pertenece estrictamente a la Fase 3: Diseño Visual).
+3. Cada ítem debe ser una pregunta verificable sobre la estructura de los wireframes para satisfacer las necesidades de los usuarios (ej: "¿Los wireframes contemplan la distribución espacial para la búsqueda y filtros?", "¿El flujo de baja fidelidad incluye el boceto del formulario de acceso y registro?", "¿La pantalla principal distribuye equilibradamente los bloques de contenido prioritario?").
+4. Genera entre 4 y 5 condiciones concisas, claras y accionables.
+
+Devuelve ESTRICTAMENTE un array JSON de strings (ejemplo: ["¿Pregunta 1?", "¿Pregunta 2?"]).
+
+Contexto de Investigación de Fase 1:
+{context}'''
                 
                 response = model.generate_content(prompt)
                 text = response.text
@@ -291,7 +305,13 @@ def get_project_checklist(db: Session, proyecto_id: int):
                 checklist_list = json.loads(text.strip())
             except Exception as e:
                 print("Error llamando a Gemini:", e)
-                checklist_list = [f"Error al generar con IA: {str(e)}"]
+                # Fallback estructural de baja fidelidad (sin colores ni estilos decorativos)
+                checklist_list = [
+                    "¿Los wireframes de baja fidelidad contemplan la distribución de los bloques clave requeridos en la Fase 1?",
+                    "¿La disposición de los componentes esenciales (campos de texto, listas y botones de acción) es clara en baja fidelidad?",
+                    "¿Se identifican los flujos de navegación principales entre las pantallas conceptuales sin recurrir a diseño visual decorativo?",
+                    "¿La estructura de las pantallas principales mantiene un equilibrio de espacios y contenido sin zonas sobrecargadas?"
+                ]
                 
         created_any = False
         for desc in checklist_list:

@@ -39,8 +39,17 @@ class NodoPantallaBase(BaseModel):
 class NodoPantallaCreate(NodoPantallaBase):
     contenidos: Optional[List[ContenidoItemCreate]] = []
 
-class NodoPantallaUpdate(NodoPantallaBase):
-    contenidos: Optional[List[ContenidoItemCreate]] = []
+class NodoPantallaUpdate(BaseModel):
+    nombre: Optional[str] = None
+    tipo: Optional[TipoNodo] = None
+    icono: Optional[str] = None
+    descripcion: Optional[str] = None
+    pos_x: Optional[int] = None
+    pos_y: Optional[int] = None
+    prioridad: Optional[str] = None
+    estado_verificacion: Optional[EstadoVerificacion] = None
+    enlace_diseno_externo: Optional[str] = None
+    contenidos: Optional[List[ContenidoItemCreate]] = None
 
 class NodoPantallaResponse(NodoPantallaBase):
     id: int
