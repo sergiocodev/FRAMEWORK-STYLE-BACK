@@ -558,6 +558,22 @@ def actualizar_metricas_visawi_desde_bd(db: Session, evaluacion: EvaluacionEstet
         db.commit()
         db.refresh(evaluacion)
 
+def get_local_ip() -> str:
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+
 def get_or_create_evaluacion(db: Session, proyecto_id: int) -> EvaluacionEstetica:
     evaluacion = db.query(EvaluacionEstetica).filter(EvaluacionEstetica.proyecto_id == proyecto_id).first()
     if not evaluacion:
@@ -651,6 +667,12 @@ def get_or_create_evaluacion(db: Session, proyecto_id: int) -> EvaluacionEstetic
     evaluacion.score_estetico = metricas["score_estetico"]
     evaluacion.nivel_madurez = metricas["nivel_madurez"]
     evaluacion.pantallas_fase4 = get_pantallas_fase4_summary(db, proyecto_id)
+    evaluacion.server_network_ip = get_local_ip()
+
+    total_m = getattr(evaluacion, "total_respuestas", 12) or 12
+    comp_m = getattr(evaluacion, "respuestas_completadas", 0) or 0
+    auto_c = getattr(evaluacion, "auto_cerrar_cupo", True)
+    evaluacion.cupo_alcanzado = bool(auto_c and comp_m >= total_m and total_m > 0)
 
     return evaluacion
 
@@ -729,8 +751,7 @@ def update_evaluacion(db: Session, proyecto_id: int, eval_in: EvaluacionUpdate) 
         recalcular_justificaciones(evaluacion)
 
     db.commit()
-    db.refresh(evaluacion)
-    return evaluacion
+    return get_or_create_evaluacion(db, proyecto_id)
 
 def update_checklist_item(db: Session, proyecto_id: int, item_id: str, item_in: ChecklistItemUpdate) -> EvaluacionEstetica:
     evaluacion = get_or_create_evaluacion(db, proyecto_id)
@@ -1143,13 +1164,85 @@ No devuelvas explicaciones fuera del bloque JSON."""
 # -------------------------------------------------------------
 # SERVICIOS PARA ENCUESTA PÚBLICA VISAWI DESATENDIDA (OPCIÓN B)
 # -------------------------------------------------------------
-def get_public_visawi_survey(db: Session, proyecto_id: int) -> dict:
+# RESOLVER DE EVALUACION Y PROYECTO (POR TOKEN O POR ID NUMERICO)
+# -----------------------------------------------------------------
+def resolver_evaluacion_y_proyecto(db: Session, token_or_id: Any):
     from app.models.project_model import Proyecto
     from fastapi import HTTPException
 
-    proyecto = db.query(Proyecto).filter(Proyecto.id == proyecto_id).first()
-    if not proyecto:
-        raise HTTPException(status_code=404, detail=f"Proyecto con ID {proyecto_id} no encontrado")
+    token_str = str(token_or_id).strip()
+    evaluacion = None
+    proyecto = None
+
+    if not token_str.isdigit():
+        evaluacion = db.query(EvaluacionEstetica).filter(EvaluacionEstetica.encuesta_token == token_str).first()
+        if evaluacion:
+            proyecto = db.query(Proyecto).filter(Proyecto.id == evaluacion.proyecto_id).first()
+    else:
+        proj_id = int(token_str)
+        proyecto = db.query(Proyecto).filter(Proyecto.id == proj_id).first()
+        if proyecto:
+            evaluacion = get_or_create_evaluacion(db, proj_id)
+
+    if not proyecto or not evaluacion:
+        raise HTTPException(
+            status_code=404,
+            detail="Cuestionario no encontrado. Verifica que el enlace sea correcto o solicita un nuevo enlace al evaluador."
+        )
+
+    # Asegurar token si aún no lo tiene
+    if not evaluacion.encuesta_token:
+        import uuid
+        evaluacion.encuesta_token = f"vis-{uuid.uuid4().hex[:12]}"
+        db.commit()
+        db.refresh(evaluacion)
+
+    return proyecto, evaluacion
+
+
+def get_public_visawi_survey(db: Session, token_or_id: Any) -> dict:
+    from fastapi import HTTPException
+
+    proyecto, evaluacion = resolver_evaluacion_y_proyecto(db, token_or_id)
+    proyecto_id = proyecto.id
+
+    encuesta_activa = getattr(evaluacion, "encuesta_activa", True)
+    if encuesta_activa is None:
+        encuesta_activa = True
+
+    total_meta = getattr(evaluacion, "total_respuestas", 12) or 12
+    completadas = getattr(evaluacion, "respuestas_completadas", 0) or 0
+    auto_cerrar = getattr(evaluacion, "auto_cerrar_cupo", True)
+    cupo_alcanzado = False
+
+    # Regla de cupo máximo
+    if auto_cerrar and completadas >= total_meta and total_meta > 0:
+        cupo_alcanzado = True
+        encuesta_activa = False
+        mensaje_cierre = f"Se ha completado el cupo máximo de participantes ({completadas} de {total_meta} respuestas requeridas) para este proyecto."
+    elif not encuesta_activa:
+        mensaje_cierre = "La recepción de respuestas para este proyecto ha concluido o se encuentra temporalmente pausada por el equipo de diseño."
+    else:
+        mensaje_cierre = None
+
+    if not encuesta_activa:
+        return {
+            "proyecto_id": proyecto.id,
+            "proyecto_nombre": proyecto.nombre,
+            "proyecto_tipo": proyecto.tipo.value if hasattr(proyecto.tipo, "value") else str(proyecto.tipo),
+            "pantallas": [],
+            "dimensiones": [],
+            "items": [],
+            "escala": [],
+            "server_network_ip": get_local_ip(),
+            "encuesta_activa": False,
+            "encuesta_token": evaluacion.encuesta_token,
+            "auto_cerrar_cupo": auto_cerrar,
+            "total_respuestas": total_meta,
+            "respuestas_completadas": completadas,
+            "cupo_alcanzado": cupo_alcanzado,
+            "mensaje_cierre": mensaje_cierre
+        }
 
     pantallas_res = get_pantallas_fase4_summary(db, proyecto_id)
     pantallas_public = []
@@ -1210,15 +1303,40 @@ def get_public_visawi_survey(db: Session, proyecto_id: int) -> dict:
         "pantallas": pantallas_public,
         "dimensiones": dimensiones_info,
         "items": DEFAULT_VISAWI_ITEMS,
-        "escala": escala_likert
+        "escala": escala_likert,
+        "server_network_ip": get_local_ip(),
+        "encuesta_activa": True,
+        "encuesta_token": evaluacion.encuesta_token,
+        "auto_cerrar_cupo": auto_cerrar,
+        "total_respuestas": total_meta,
+        "respuestas_completadas": completadas,
+        "cupo_alcanzado": False,
+        "mensaje_cierre": None
     }
 
-def registrar_respuesta_visawi_publica(db: Session, proyecto_id: int, payload: VisawiEncuestaRespuestaInput) -> dict:
+def registrar_respuesta_visawi_publica(db: Session, token_or_id: Any, payload: VisawiEncuestaRespuestaInput) -> dict:
     from fastapi import HTTPException
     
-    # Asegurar que la evaluación exista
-    evaluacion = get_or_create_evaluacion(db, proyecto_id)
-    
+    proyecto, evaluacion = resolver_evaluacion_y_proyecto(db, token_or_id)
+    proyecto_id = proyecto.id
+
+    # Validar si la encuesta está activa
+    if not getattr(evaluacion, "encuesta_activa", True):
+        raise HTTPException(
+            status_code=403,
+            detail="La recepción de respuestas para este proyecto está cerrada. No se pueden registrar nuevas evaluaciones."
+        )
+
+    # Validar cupo
+    total_meta = getattr(evaluacion, "total_respuestas", 12) or 12
+    completadas = getattr(evaluacion, "respuestas_completadas", 0) or 0
+    auto_cerrar = getattr(evaluacion, "auto_cerrar_cupo", True)
+    if auto_cerrar and completadas >= total_meta and total_meta > 0:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cupo completo: ya se recibieron las {completadas} de {total_meta} evaluaciones requeridas para este proyecto."
+        )
+
     # Validar que payload contenga respuestas para los 18 reactivos
     respuestas = payload.respuestas or {}
     if len(respuestas) < 18:
@@ -1229,6 +1347,12 @@ def registrar_respuesta_visawi_publica(db: Session, proyecto_id: int, payload: V
 
     # Llamar al registro psicométrico oficial (calcula inversión y actualiza promedios en BD)
     eval_actualizada = registrar_respuesta_visawi(db, proyecto_id, payload)
+    
+    # Si tras este registro se alcanzó el cupo y auto_cerrar_cupo está activo, marcar como cerrada
+    if auto_cerrar and eval_actualizada.respuestas_completadas >= total_meta:
+        eval_actualizada.encuesta_activa = False
+        db.commit()
+        db.refresh(eval_actualizada)
     
     # Obtener la última encuesta guardada
     ultima_encuesta = db.query(EvaluacionVisawiEncuesta).filter(
@@ -1250,3 +1374,21 @@ def registrar_respuesta_visawi_publica(db: Session, proyecto_id: int, payload: V
     }
 
 
+
+def toggle_encuesta_activa(db: Session, proyecto_id: int) -> EvaluacionEstetica:
+    evaluacion = get_or_create_evaluacion(db, proyecto_id)
+    actual = getattr(evaluacion, "encuesta_activa", True)
+    if actual is None:
+        actual = True
+    evaluacion.encuesta_activa = not actual
+    db.commit()
+    db.refresh(evaluacion)
+    return get_or_create_evaluacion(db, proyecto_id)
+
+def regenerar_enlace_encuesta(db: Session, proyecto_id: int) -> EvaluacionEstetica:
+    import uuid
+    evaluacion = get_or_create_evaluacion(db, proyecto_id)
+    evaluacion.encuesta_token = f"vis-{uuid.uuid4().hex[:12]}"
+    db.commit()
+    db.refresh(evaluacion)
+    return get_or_create_evaluacion(db, proyecto_id)
