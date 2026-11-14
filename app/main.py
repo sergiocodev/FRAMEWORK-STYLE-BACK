@@ -1,11 +1,28 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 from app.routers import user_router, auth_router, investigation_router, project_router, diseno_conceptual_router, diseno_detallado_router, diseno_detallado_pantallas_router, diseno_visual_router, client_router, assessment_router
 from app.core.database import engine, Base
 from app.models import user_model, client_model, project_model, file_model, investigation_model, diseno_conceptual_model, diseno_visual_model, diseno_detallado_model, assessment_model
 
 # Crear las tablas en la base de datos automáticamente al iniciar
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_typography_columns():
+    """Agrega de forma idempotente letter_spacing y line_height_px si la tabla ya existia."""
+    inspector = inspect(engine)
+    if "diseno_visual_tipografias" not in inspector.get_table_names():
+        return
+    existing_cols = {col["name"] for col in inspector.get_columns("diseno_visual_tipografias")}
+    with engine.begin() as conn:
+        if "letter_spacing" not in existing_cols:
+            conn.execute(text("ALTER TABLE diseno_visual_tipografias ADD COLUMN letter_spacing FLOAT NULL"))
+        if "line_height_px" not in existing_cols:
+            conn.execute(text("ALTER TABLE diseno_visual_tipografias ADD COLUMN line_height_px INT NULL"))
+
+
+ensure_typography_columns()
 
 app = FastAPI(title="API STYLE")
 

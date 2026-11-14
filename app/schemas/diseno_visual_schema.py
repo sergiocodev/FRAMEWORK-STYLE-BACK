@@ -50,6 +50,8 @@ class TypographyItemBase(BaseModel):
     interlineado: float
     tipo_fuente: Optional[str] = "Principal"
     orden: Optional[int] = 0
+    letter_spacing: Optional[float] = None
+    line_height_px: Optional[int] = None
 
 class TypographyItemCreate(TypographyItemBase):
     proyecto_id: int

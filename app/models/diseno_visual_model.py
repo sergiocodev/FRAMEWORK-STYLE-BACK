@@ -40,6 +40,8 @@ class TypographyItem(Base):
     interlineado = Column(Float, nullable=False)
     tipo_fuente = Column(String(50), default="Principal") # Principal o Secundaria
     orden = Column(Integer, default=0)
+    letter_spacing = Column(Float, nullable=True)
+    line_height_px = Column(Integer, nullable=True)
 
 class IconItem(Base):
     __tablename__ = "diseno_visual_iconos"

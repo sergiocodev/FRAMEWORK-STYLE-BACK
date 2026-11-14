@@ -321,6 +321,8 @@ CREATE TABLE `diseno_visual_tipografias` (
   `interlineado` FLOAT NOT NULL,
   `tipo_fuente` VARCHAR(50) DEFAULT 'Principal',
   `orden` INT DEFAULT 0,
+  `letter_spacing` FLOAT NULL,
+  `line_height_px` INT NULL,
   PRIMARY KEY (`id`),
   KEY `fk_visual_tipografias_proy_id` (`proyecto_id`),
   CONSTRAINT `fk_visual_tipografias_proyecto` FOREIGN KEY (`proyecto_id`) REFERENCES `proyectos` (`id`) ON DELETE CASCADE
