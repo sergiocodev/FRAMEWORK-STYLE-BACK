@@ -20,8 +20,6 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
-from app.services.ngo_aesthetics_service import _compute_metrics
-
 
 # ---------------------------------------------------------------------------
 # 1. EXTRACCIÓN INTELIGENTE DE WIDGETS (Supresión de contenedores y NMS)
@@ -161,7 +159,9 @@ def _compute_structural_metadata(boxes: List[Dict], frame_w: int, frame_h: int) 
             q_name = "Q3"
         else:
             q_name = "Q4"
-        quadrants[q_name].append({**b, "id": f"elem_{idx + 1}", "cuadrante": q_name})
+        b['id'] = b.get('id') or f"elem_{idx + 1}"
+        b['cuadrante'] = q_name
+        quadrants[q_name].append({**b})
 
     row_clusters = _cluster_coordinates([b['y'] for b in boxes], tolerance=20.0)
     col_clusters = _cluster_coordinates([b['x'] for b in boxes], tolerance=20.0)
@@ -319,7 +319,7 @@ def _detect_defects(meta: Dict[str, Any], n_elements: int, frame_w: int, frame_h
         defects.append({
             "code": "OM",
             "nombre": "Sobrecarga de Interfaz (Overloaded MUI)",
-            "descripcion": f"Se detectaron {n_elements} elementos en un único wireframe conceptual. Considera podar elementos no esenciales para el MVP.",
+            "descripcion": f"Se detectaron {n_elements} elementos en un único wireframe conceptual. Considera simplificar o retirar elementos secundarios no esenciales.",
             "severidad": "alta" if n_elements > 25 else "media",
             "categoria": "Visual"
         })
@@ -458,7 +458,7 @@ def _generate_recommendations(defects: List[Dict], meta_old: Dict, meta_new: Dic
                 "id": "rec_om",
                 "guideline": "Minimal Action: Reduce display to necessary components",
                 "titulo": "Podar Elementos Secundarios (Cuadrantes)",
-                "descripcion": "El wireframe presenta una alta densidad. Utiliza el selector de cuadrantes para desactivar elementos decorativos o no prioritarios para el MVP.",
+                "descripcion": "El wireframe presenta una alta densidad. Utiliza el selector de cuadrantes para desactivar elementos decorativos o no prioritarios.",
                 "tipo": "manual",
                 "icono": "✂️",
                 "beneficio": "Disminuye la carga cognitiva en un 25% según estudios de usabilidad."
@@ -501,14 +501,10 @@ def restructure_wireframe(image_path: str) -> Dict[str, Any]:
     # 4. Reestructuración de coordenadas (Proporción áurea, Márgenes, Padding)
     restructured_boxes, meta_new = _restructure_layout(boxes, W, H)
 
-    # 5. Métricas Ngo clásicas para antes y después
-    ngo_old = _compute_metrics(boxes, W, H)
-    ngo_new = _compute_metrics(restructured_boxes, W, H)
-
-    # 6. Recomendaciones Material Design
+    # 5. Recomendaciones Material Design
     recommendations = _generate_recommendations(defects, meta_old, meta_new)
 
-    # 7. Resumen de cuadrantes
+    # 6. Resumen de cuadrantes
     quadrants_summary = []
     total_elements = len(boxes)
     for q_code, q_boxes in meta_old["quadrants"].items():
@@ -546,17 +542,5 @@ def restructure_wireframe(image_path: str) -> Dict[str, Any]:
         "cuadrantes": quadrants_summary,
         "original_boxes": boxes,
         "restructured_boxes": restructured_boxes,
-        "ngo_comparativa": {
-            "balance_old": round(ngo_old.get("BM", 0.0), 3),
-            "balance_new": round(ngo_new.get("BM", 0.0), 3),
-            "regularidad_old": round(ngo_old.get("RM", 0.0), 3),
-            "regularidad_new": round(ngo_new.get("RM", 0.0), 3),
-            "simplicidad_old": round(ngo_old.get("SMM", 0.0), 3),
-            "simplicidad_new": round(ngo_new.get("SMM", 0.0), 3),
-            "unidad_old": round(ngo_old.get("UM", 0.0), 3),
-            "unidad_new": round(ngo_new.get("UM", 0.0), 3),
-            "global_old": round(ngo_old.get("OM", 0.0), 3),
-            "global_new": round(ngo_new.get("OM", 0.0), 3),
-        },
         "recomendaciones": recommendations
     }
