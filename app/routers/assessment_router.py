@@ -28,21 +28,21 @@ public_router = APIRouter(
     tags=["Encuesta Pública VisAWI"]
 )
 
-@public_router.get("/{proyecto_id}", response_model=VisawiPublicSurveyInfo, summary="Obtener Datos de la Encuesta Pública VisAWI")
-def get_public_survey_info(proyecto_id: int, db: Session = Depends(get_db)):
+@public_router.get("/{token_or_id}", response_model=VisawiPublicSurveyInfo, summary="Obtener Datos de la Encuesta Pública VisAWI")
+def get_public_survey_info(token_or_id: str, db: Session = Depends(get_db)):
     """
     Obtiene los datos públicos del proyecto, las capturas de pantalla de Fase 4 y los 18 ítems VisAWI.
     No requiere autenticación.
     """
-    return assessment_service.get_public_visawi_survey(db, proyecto_id)
+    return assessment_service.get_public_visawi_survey(db, token_or_id)
 
-@public_router.post("/{proyecto_id}/respuestas", response_model=VisawiPublicSubmissionResponse, summary="Enviar Respuestas de Encuesta Pública VisAWI")
-def submit_public_survey_response(proyecto_id: int, payload: VisawiEncuestaRespuestaInput, db: Session = Depends(get_db)):
+@public_router.post("/{token_or_id}/respuestas", response_model=VisawiPublicSubmissionResponse, summary="Enviar Respuestas de Encuesta Pública VisAWI")
+def submit_public_survey_response(token_or_id: str, payload: VisawiEncuestaRespuestaInput, db: Session = Depends(get_db)):
     """
     Registra las respuestas de un participante externo anónimo o evaluador, actualiza las métricas en BD.
     No requiere autenticación.
     """
-    return assessment_service.registrar_respuesta_visawi_publica(db, proyecto_id, payload)
+    return assessment_service.registrar_respuesta_visawi_publica(db, token_or_id, payload)
 
 
 @router.get("", response_model=EvaluacionResponse, summary="Obtener Evaluación Estética")
@@ -52,6 +52,20 @@ def get_assessment(proyecto_id: int, db: Session = Depends(get_db)):
     Si no existe, se inicializa automáticamente con los valores predeterminados de Gestalt, VisAWI y hallazgos.
     """
     return assessment_service.get_or_create_evaluacion(db, proyecto_id)
+
+@router.post("/regenerar-enlace", response_model=EvaluacionResponse, summary="Regenerar Token del Enlace Público")
+def regenerate_public_survey_token(proyecto_id: int, db: Session = Depends(get_db)):
+    """
+    Invalida el enlace público anterior generando un nuevo token único seguro.
+    """
+    return assessment_service.regenerar_enlace_encuesta(db, proyecto_id)
+
+@router.put("/toggle-encuesta", response_model=EvaluacionResponse, summary="Alternar Estado de la Encuesta Pública")
+def toggle_public_survey_status(proyecto_id: int, db: Session = Depends(get_db)):
+    """
+    Activa o desactiva la recepción pública de respuestas para la evaluación del proyecto.
+    """
+    return assessment_service.toggle_encuesta_activa(db, proyecto_id)
 
 @router.put("", response_model=EvaluacionResponse, summary="Actualizar Evaluación Estética")
 def update_assessment(proyecto_id: int, eval_in: EvaluacionUpdate, db: Session = Depends(get_db)):

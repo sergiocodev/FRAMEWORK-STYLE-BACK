@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+import urllib.request
+import urllib.parse
+import json
 
 from app.core.database import get_db
 from app.schemas import diseno_visual_schema as schemas
@@ -102,3 +105,43 @@ def optimize_palette_mssboa(req: schemas.MSSBOAOptimizeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en optimizador MSSBOA: {str(e)}")
 
+# =========================================================================
+# PROXY PARA ICONOS OPEN SOURCE (Evita bloqueos de CORS y AdBlockers del navegador)
+# =========================================================================
+
+@router.get("/catalogo/collection")
+def get_icon_collection(prefix: str):
+    """Proxy seguro para obtener el listado de nombres de una colección Iconify"""
+    try:
+        url = f"https://api.iconify.design/collection?prefix={prefix}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+            return data
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error al conectar con Iconify: {str(e)}")
+
+@router.get("/catalogo/search")
+def search_icons_proxy(prefix: str, query: str = "", limit: int = 48):
+    """Proxy seguro para búsqueda de iconos en Iconify"""
+    try:
+        clean_q = urllib.parse.quote(query.strip())
+        url = f"https://api.iconify.design/search?prefix={prefix}&query={clean_q}&limit={limit}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+            return data
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error en búsqueda Iconify: {str(e)}")
+
+@router.get("/catalogo/icons")
+def get_icons_batch_proxy(prefix: str, icons: str):
+    """Proxy seguro para obtener los cuerpos SVG en lote desde Iconify"""
+    try:
+        url = f"https://api.iconify.design/{prefix}.json?icons={icons}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+            return data
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error al cargar lote SVG de Iconify: {str(e)}")

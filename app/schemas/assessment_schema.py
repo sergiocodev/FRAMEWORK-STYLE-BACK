@@ -90,6 +90,9 @@ class EvaluacionUpdate(BaseModel):
     metodo_seleccionado: Optional[str] = None
     estado: Optional[str] = None
     encuesta_url: Optional[str] = None
+    encuesta_activa: Optional[bool] = None
+    encuesta_token: Optional[str] = None
+    auto_cerrar_cupo: Optional[bool] = None
     total_respuestas: Optional[int] = None
     respuestas_completadas: Optional[int] = None
     conclusion_estado: Optional[str] = None
@@ -133,6 +136,11 @@ class EvaluacionResponse(BaseModel):
     nivel_madurez: Optional[str] = "En Evaluación"
     pantallas_fase4: List[PantallaFase4Item] = []
     visawi_encuestas: List[VisawiEncuestaResponse] = []
+    server_network_ip: Optional[str] = None
+    encuesta_activa: bool = True
+    encuesta_token: Optional[str] = None
+    auto_cerrar_cupo: bool = True
+    mensaje_cierre: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -163,6 +171,11 @@ class VisawiPublicSurveyInfo(BaseModel):
     dimensiones: List[VisawiPublicDimensionInfo] = []
     items: List[VisawiPublicQuestionnaireItem] = []
     escala: List[Dict[str, Any]] = []
+    server_network_ip: Optional[str] = None
+    encuesta_activa: bool = True
+    encuesta_token: Optional[str] = None
+    auto_cerrar_cupo: bool = True
+    mensaje_cierre: Optional[str] = None
 
 class VisawiPublicSubmissionResponse(BaseModel):
     success: bool

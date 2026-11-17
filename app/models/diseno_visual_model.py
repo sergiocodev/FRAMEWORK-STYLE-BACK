@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, text, BigInteger, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, DateTime, text, BigInteger, ForeignKey, Float, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -47,5 +47,5 @@ class IconItem(Base):
     proyecto_id = Column(BigInteger, ForeignKey("proyectos.id", ondelete="CASCADE"), nullable=False)
     nombre = Column(String(100), nullable=False)
     token_name = Column(String(100), nullable=False) # e.g. icon.custom
-    svg_content = Column(String(10000), nullable=False) # RAW SVG string
+    svg_content = Column(Text, nullable=False) # RAW SVG string sin restricción de tamaño
     estilo = Column(String(50), nullable=True) # Lineal, Relleno
