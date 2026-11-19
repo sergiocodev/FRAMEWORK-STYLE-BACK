@@ -7,6 +7,7 @@ from app.schemas import diseno_conceptual_schema
 from app.services import diseno_conceptual_service
 from app.services import ngo_aesthetics_service
 from app.services import aesthetic_restructuring_service
+from app.services import multicriteria_layout_service
 from app.models.diseno_conceptual_model import Wireframe
 
 router = APIRouter(
@@ -159,3 +160,24 @@ def reestructurar_wireframe_estetica(proyecto_id: int, wireframe_id: int, db: Se
         raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado en el servidor")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al reestructurar estetica: {str(e)}")
+
+# --- EVALUACION MULTICRITERIO DE LAYOUT (REGRESION Y ENTROPIA) ---
+@router.post("/wireframes/{wireframe_id}/evaluar-multicriterio", summary="Evaluacion Multicriterio de Layout de Wireframe")
+def evaluar_wireframe_multicriterio(proyecto_id: int, wireframe_id: int, db: Session = Depends(get_db)):
+    import os
+    wf = db.query(Wireframe).filter(Wireframe.id == wireframe_id).first()
+    if not wf:
+        raise HTTPException(status_code=404, detail="Wireframe no encontrado")
+    if not wf.archivo or not getattr(wf.archivo, "ruta_almacenamiento", None):
+        raise HTTPException(status_code=400, detail="El wireframe no tiene imagen asociada")
+    image_path = wf.archivo.ruta_almacenamiento
+    if not os.path.isabs(image_path):
+        image_path = os.path.join(os.getcwd(), image_path)
+    try:
+        result = multicriteria_layout_service.evaluate_multicriteria_layout(image_path)
+        return result
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Archivo de imagen no encontrado en el servidor")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al evaluar multicriterio: {str(e)}")
+
