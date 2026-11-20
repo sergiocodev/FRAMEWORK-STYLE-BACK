@@ -17,7 +17,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 async def upload_and_analyze_design(db: Session, proyecto_id: int, nodo_id: int, file: UploadFile):
     # Guardar archivo fisicamente
-    file_extension = file.filename.split(".")[-1]
+    file_extension = file.filename.split(".")[-1] if "." in file.filename else "png"
     file_name = f"{uuid.uuid4()}.{file_extension}"
     file_path = os.path.join(UPLOAD_DIR, file_name)
     
@@ -53,8 +53,12 @@ async def upload_and_analyze_design(db: Session, proyecto_id: int, nodo_id: int,
     db.commit()
     db.refresh(db_diseno)
 
-    # Simular analisis de IA
-    await simulate_ai_analysis(db, db_diseno.id, proyecto_id, file_path)
+    # Analisis optimizado de IA con tokens de la Fase 3
+    try:
+        await simulate_ai_analysis(db, db_diseno.id, proyecto_id, file_path)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
     
     db.refresh(db_diseno)
     return db_diseno
@@ -64,48 +68,80 @@ async def simulate_ai_analysis(db: Session, diseno_id: int, proyecto_id: int, fi
     
     colores = db.query(ColorItem).filter(ColorItem.proyecto_id == proyecto_id).order_by(ColorItem.orden).all()
     tipografias = db.query(TypographyItem).filter(TypographyItem.proyecto_id == proyecto_id).order_by(TypographyItem.orden).all()
-    
     config = db.query(DisenoVisualConfig).filter(DisenoVisualConfig.proyecto_id == proyecto_id).first()
     
     preguntas = []
-    if not colores and not tipografias:
-        preguntas = ["Colores aplicados correctamente", "Tipografías aplicadas correctamente", "Iconografía aplicada correctamente", "Espaciado y alineación general correcta"]
-    else:
+    tokens_resumen = []
+    
+    if colores:
         for c in colores:
-            preguntas.append(f"Color {c.uso} ({c.hex_code}) aplicado")
-        for t in tipografias:
-            preguntas.append(f"Tipografía {t.estilo} ({t.tamano_px}px) aplicada")
-            
-        if config:
-            preguntas.append(f"Iconografía ({config.estilo_iconos}, {config.grosor_iconos}px) aplicada")
-            preguntas.append(f"Espaciado ({config.escala_espaciado_base}px) y cuadrícula ({config.grid_columnas} col) correctos")
-        else:
-            preguntas.append("Iconografía aplicada correctamente")
-            preguntas.append("Espaciado y alineación general correcta")
+            p_text = f"Color {c.uso} ({c.hex_code}) aplicado"
+            preguntas.append(p_text)
+            tokens_resumen.append(f"- {c.uso}: {c.hex_code}")
+    else:
+        preguntas.extend(["Color Principal aplicado correctamente", "Color Secundario aplicado correctamente", "Colores de fondo y superficie consistentes"])
         
+    if tipografias:
+        for t in tipografias:
+            fuente_nom = "Inter"
+            if config:
+                fuente_nom = config.fuente_principal if t.tipo_fuente == "Principal" else config.fuente_secundaria
+            p_text = f"Tipografía {t.estilo} ({t.tamano_px}px) aplicada"
+            preguntas.append(p_text)
+            tokens_resumen.append(f"- Tipografía {t.estilo}: {t.tamano_px}px ({fuente_nom}, {t.peso})")
+    else:
+        preguntas.extend(["Jerarquía tipográfica (títulos y subtítulos) clara", "Tipografía de cuerpo legible y consistente"])
+        
+    if config:
+        preguntas.append(f"Iconografía ({config.estilo_iconos}, {config.grosor_iconos}px) aplicada")
+        preguntas.append(f"Espaciado ({config.escala_espaciado_base}px) y cuadrícula ({config.grid_columnas} col) correctos")
+        tokens_resumen.append(f"- Iconos: estilo {config.estilo_iconos}, grosor {config.grosor_iconos}px")
+        tokens_resumen.append(f"- Espaciado base: {config.escala_espaciado_base}px en grilla de {config.grid_columnas} columnas")
+    else:
+        preguntas.append("Iconografía con estilo y trazo uniforme")
+        preguntas.append("Espaciado consistente en múltiplos de 8px")
+
     api_key = settings.GEMINI_API_KEY
-    try:
-        if api_key:
+    if api_key:
+        try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(settings.GEMINI_MODEL)
+            model_name = settings.GEMINI_MODEL or "gemini-3.1-flash-lite"
+            if "/" in model_name:
+                model_name = model_name.split("/")[-1]
+                
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                generation_config={"temperature": 0.2, "response_mime_type": "application/json"}
+            )
             
-            prompt = f'''Eres un analista experto de UI/UX evaluando un prototipo visual de alta fidelidad.
-Tu objetivo es verificar si el diseo de la imagen cumple estrictamente con el sistema de diseo especificado y generar un reporte de alertas y check de validacion.
-Devuelve EXACTAMENTE un objeto JSON valido con el siguiente formato:
+            prompt = f'''Eres un auditor senior de diseño UI/UX y Design Systems.
+Tu misión es verificar si el prototipo visual de la imagen cumple rigurosamente con la Guía de Estilos y Tokens de Diseño acordados en la Fase 3 del framework STYLE.
+
+SISTEMA DE DISEÑO DEL PROYECTO (TOKENS OFICIALES DE FASE 3):
+{chr(10).join(tokens_resumen) if tokens_resumen else "Sistema de diseño estándar: Colores corporativos, jerarquía tipográfica 16/24px, grilla de 8px."}
+
+LISTA DE COMPROBACIÓN A EVALUAR:
+{json.dumps(preguntas, indent=2)}
+
+INSTRUCCIONES CLAVE DE EVALUACIÓN:
+1. Revisa la imagen adjunta. Para cada una de las preguntas de la lista, determina si el prototipo cumple satisfactoriamente ("aprobado") o si no cumple / no se observa ("rechazado").
+2. Si la imagen es un boceto en blanco y negro (wireframe en escala de grises) y no tiene estilos de alta fidelidad, rechaza los colores correspondientes y genera una alerta clara indicándolo.
+3. Genera entre 1 y 3 alertas específicas con elementos tangibles de la interfaz donde se detecte desalineación, bajo contraste o inconsistencia con la guía visual.
+4. Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
 {{
   "alertas": [
-    {{"tipo": "error|warning|info", "elemento": "Ej: Boton primario", "mensaje": "Breve descripcion del error visual", "detectado": "Valor encontrado (ej: #FF0000)", "esperado": "Valor esperado (ej: #00FF00)"}}
+    {{
+      "tipo": "error|warning|info",
+      "elemento": "Nombre del componente o sección (ej: Botón 'Comprar', Barra de navegación, Título principal)",
+      "mensaje": "Descripción breve y clara de la discrepancia visual observada",
+      "detectado": "Valor o estilo encontrado en la imagen",
+      "esperado": "Valor o token esperado según la guía visual"
+    }}
   ],
   "checklist": {{
-    "Pregunta Exacta": "aprobado|rechazado"
+    "Texto Exacto de la Pregunta": "aprobado|rechazado"
   }}
-}}
-
-PREGUNTAS DE CHECKLIST A EVALUAR:
-{json.dumps(preguntas)}
-
-Por cada pregunta en el checklist, evalua la imagen y asigna "aprobado" si cumple o "rechazado" si no.
-Ademas, genera de 1 a 3 alertas si encuentras desviaciones notables de UX/UI.'''
+}}'''
 
             def _call_gemini():
                 img = PIL.Image.open(file_path)
@@ -113,8 +149,7 @@ Ademas, genera de 1 a 3 alertas si encuentras desviaciones notables de UX/UI.'''
                 
             response = await run_in_threadpool(_call_gemini)
             
-            # Limpiar markdown
-            text = response.text
+            text = response.text.strip()
             if text.startswith("```json"):
                 text = text[7:]
             if text.startswith("```"):
@@ -122,13 +157,13 @@ Ademas, genera de 1 a 3 alertas si encuentras desviaciones notables de UX/UI.'''
             if text.endswith("```"):
                 text = text[:-3]
                 
-            data = json.loads(text)
+            data = json.loads(text.strip())
             
             for al in data.get("alertas", []):
                 alerta = DisenoDetalladoAlerta(
                     diseno_archivo_id=diseno_id,
                     tipo=al.get("tipo", "info"),
-                    elemento=al.get("elemento", ""),
+                    elemento=al.get("elemento", "Elemento UI"),
                     mensaje=al.get("mensaje", ""),
                     detectado=al.get("detectado", ""),
                     esperado=al.get("esperado", "")
@@ -147,13 +182,13 @@ Ademas, genera de 1 a 3 alertas si encuentras desviaciones notables de UX/UI.'''
                 
             db.commit()
             return
-    except Exception as e:
-        import traceback
-        with open("ai_error.log", "w") as f_err:
-            traceback.print_exc(file=f_err)
-        db.rollback()
-        
-    # Fallback en caso de error de IA o no api key
+        except Exception as e:
+            import traceback
+            with open("ai_error.log", "w") as f_err:
+                traceback.print_exc(file=f_err)
+            db.rollback()
+            
+    # Fallback determinista si no hay Gemini o si falló
     for p in preguntas:
         db.add(DisenoDetalladoChecklistItem(diseno_archivo_id=diseno_id, pregunta=p, estado="pendiente"))
     db.commit()

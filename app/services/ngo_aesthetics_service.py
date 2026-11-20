@@ -15,6 +15,8 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
+from app.services.aesthetic_restructuring_service import _extract_wireframe_widgets
+
 
 # ---------------------------------------------------------------------------
 # EXTRACCIÓN DE BOUNDING BOXES DESDE IMAGEN DE WIREFRAME
@@ -434,7 +436,7 @@ def evaluar_wireframe_ngo(image_path: str) -> Dict:
         interpretaciones: texto explicativo para cada métrica
         nivel_calidad: 'Alta' | 'Media' | 'Baja'
     """
-    boxes, W, H = _extract_bounding_boxes(image_path)
+    boxes, W, H = _extract_wireframe_widgets(image_path)
     metrics = _compute_metrics(boxes, W, H)
 
     # Interpretaciones según umbrales del paper (Tabla 3 implícita)
