@@ -336,11 +336,12 @@ def _compute_composite_scores(x: Dict[str, float]) -> Tuple[float, float, float]
 _METRIC_META = {
     "DE": {
         "codigo": "DE",
-        "nombre": "Espacio Libre y Aire Visual (Densidad)",
+        "nombre": "Espacio Libre y Densidad",
         "formula": "DE = 1 - 2 × |0.5 - Ocupación|",
         "peso_entropia": 22.7,
         "peso_regresion": -10.9,
-        "descripcion": "Mide si la pantalla 'respira' bien o si está muy sobrecargada o vacía. Lo ideal es que cerca del 50% sea contenido y el resto espacio libre para que la lectura sea cómoda y descansada."
+        "nivel_relevancia": "Secundaria",
+        "descripcion": "Mide el balance entre zonas con contenido y espacios en blanco. Lo ideal es que cerca del 50% sea contenido y el resto espacio libre para una lectura cómoda y descansada."
     },
     "VS": {
         "codigo": "VS",
@@ -348,7 +349,8 @@ _METRIC_META = {
         "formula": "VS = 2 × Área_Especular / Área_Total",
         "peso_entropia": 9.5,
         "peso_regresion": 54.9,
-        "descripcion": "Comprueba si el lado izquierdo y el derecho se ven parejos como en un espejo. Es el aspecto que más influye (+54.9%) para que una persona sienta que el diseño es prolijo, ordenado y profesional."
+        "nivel_relevancia": "Alta",
+        "descripcion": "Comprueba si el lado izquierdo y el derecho se ven parejos como en un espejo. Es el aspecto más determinante para que una persona sienta que el diseño es armónico, ordenado y profesional."
     },
     "BA": {
         "codigo": "BA",
@@ -356,6 +358,7 @@ _METRIC_META = {
         "formula": "BA = 1 - (|BA_vert| + |BA_horiz|) / 2",
         "peso_entropia": 14.2,
         "peso_regresion": 10.7,
+        "nivel_relevancia": "Media",
         "descripcion": "Verifica que la pantalla no se sienta 'inclinada' o más cargada hacia un costado o hacia abajo. Los elementos importantes deben repartirse bien respecto al centro de la pantalla."
     },
     "PR": {
@@ -364,6 +367,7 @@ _METRIC_META = {
         "formula": "PR = Promedio(1 - min|pj - pi|)",
         "peso_entropia": 17.8,
         "peso_regresion": 34.0,
+        "nivel_relevancia": "Alta",
         "descripcion": "Revisa si las tarjetas, botones e imágenes tienen formas armónicas a la vista (como rectángulos estándar o proporción áurea) en lugar de verse estirados, comprimidos o deformes."
     },
     "UN": {
@@ -372,6 +376,7 @@ _METRIC_META = {
         "formula": "UN = (UN_forma + UN_espacio) / 2",
         "peso_entropia": 15.7,
         "peso_regresion": 8.9,
+        "nivel_relevancia": "Media",
         "descripcion": "Evalúa si los componentes parecidos conservan un tamaño consistente y si los márgenes respecto a los bordes de la pantalla son limpios y regulares, sin partes amontonadas."
     },
     "SI": {
@@ -380,6 +385,7 @@ _METRIC_META = {
         "formula": "SI = (N_vert + N_horiz) / (2 × N)",
         "peso_entropia": 11.2,
         "peso_regresion": 48.3,
+        "nivel_relevancia": "Alta",
         "descripcion": "Comprueba que los elementos compartan líneas derechas en común (columnas alineadas y filas niveladas). Menos líneas desordenadas hace que el usuario entienda y navegue todo con mayor rapidez."
     },
     "SE": {
@@ -388,6 +394,7 @@ _METRIC_META = {
         "formula": "SE = 1 - Suma(|qj - vj|) / 8",
         "peso_entropia": 8.9,
         "peso_regresion": -2.0,
+        "nivel_relevancia": "Secundaria",
         "descripcion": "Revisa que el contenido principal comience arriba a la izquierda y guíe la mirada con naturalidad hacia abajo a la derecha, siguiendo la forma en que solemos leer habitualmente."
     }
 }
@@ -476,6 +483,7 @@ def evaluate_multicriteria_layout(image_path: str) -> Dict[str, Any]:
             "color": color,
             "peso_entropia": meta["peso_entropia"],
             "peso_regresion": meta["peso_regresion"],
+            "nivel_relevancia": meta.get("nivel_relevancia", "Media"),
             "descripcion": meta["descripcion"]
         }
 
