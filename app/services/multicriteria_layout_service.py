@@ -47,81 +47,124 @@ def _compute_density(boxes: List[Dict], width: int, height: int) -> float:
 
 def _compute_vertical_symmetry(boxes: List[Dict], width: int, height: int) -> float:
     """
-    Ecuaciones 2-5:
+    Ecuaciones 2-5 de Wang et al. (2024):
     VS = (2 * nc) / sum(wi * hi)
-    nc: área simétrica reflejada entre la mitad izquierda y derecha.
+    nc: número de pares de píxeles (u, v) que cumplen con los 3 criterios del paper:
+        1. gu = gv = 0 (pertenecen a elementos del wireframe)
+        2. yu = yv (misma fila / altura)
+        3. |width/2 - xu| = |xv - width/2| (simétricos respecto al eje vertical central)
     """
-    if not boxes:
-        return 1.0
-    total_area = sum(float(b['w'] * b['h']) for b in boxes)
-    if total_area <= 0:
+    if not boxes or width <= 0 or height <= 0:
         return 1.0
 
-    mid_x = float(width) / 2.0
-    left_boxes = [b for b in boxes if (b['x'] + b['w'] / 2.0) <= mid_x]
-    right_boxes = [b for b in boxes if (b['x'] + b['w'] / 2.0) > mid_x]
+    # Crear máscara binaria de los elementos del wireframe
+    mask = np.zeros((height, width), dtype=bool)
+    for b in boxes:
+        x1 = max(0, min(width, int(round(b['x']))))
+        y1 = max(0, min(height, int(round(b['y']))))
+        x2 = max(0, min(width, int(round(b['x'] + b['w']))))
+        y2 = max(0, min(height, int(round(b['y'] + b['h']))))
+        if x2 > x1 and y2 > y1:
+            mask[y1:y2, x1:x2] = True
 
-    if not left_boxes or not right_boxes:
-        return 0.25
+    total_pixels = int(np.count_nonzero(mask))
+    if total_pixels == 0:
+        return 1.0
 
-    # Reflejo especular de las cajas izquierdas hacia la derecha
-    mirrored_left = []
-    for b in left_boxes:
-        mirr_x = float(width) - (b['x'] + b['w'])
-        mirrored_left.append({
-            'x': mirr_x,
-            'y': b['y'],
-            'w': b['w'],
-            'h': b['h']
-        })
+    mid_x = width // 2
+    left_half = mask[:, :mid_x]
+    # Reflejar especularmente la mitad derecha sobre el eje central
+    right_half_mirrored = np.fliplr(mask[:, width - mid_x:])
 
-    # Calcular área de intersección entre cajas reflejadas y cajas de la derecha
-    overlap_area = 0.0
-    for ml in mirrored_left:
-        for r in right_boxes:
-            ix = max(0.0, min(ml['x'] + ml['w'], r['x'] + r['w']) - max(ml['x'], r['x']))
-            iy = max(0.0, min(ml['y'] + ml['h'], r['y'] + r['h']) - max(ml['y'], r['y']))
-            if ix > 0 and iy > 0:
-                overlap_area += (ix * iy)
+    # Contar pares de píxeles que coinciden exactamente en ambas mitades (nc)
+    nc = int(np.count_nonzero(left_half & right_half_mirrored))
 
-    vs = (2.0 * overlap_area) / total_area
-    # Compensar factor de escala para interfaces discretas de wireframes
-    vs = vs * 1.5
+    # Ecuación 5: VS = (2 * nc) / total_area
+    vs = (2.0 * nc) / float(total_pixels)
     return float(np.clip(vs, 0.0, 1.0))
 
 
 def _compute_balance(boxes: List[Dict], width: int, height: int) -> float:
     """
-    Ecuaciones 6-9:
+    Ecuaciones 6-9 de Wang et al. (2024):
     BA = 1 - (|BAvertical| + |BAhorizontal|) / 2
     BAvertical = (WL - WR) / max(|WL|, |WR|)
     BAhorizontal = (WT - WB) / max(|WT|, |WB|)
-    Wj = sum(aij * dij)
+    Wj = sum(aij * dij), j in {L, R, T, B}
+
+    Donde dij es la distancia del centro de masa de cada porción al centro
+    del lienzo (cx_f, cy_f). Los elementos que cruzan los ejes de simetría
+    se subdividen en sus porciones respectivas para una distribución física real.
     """
-    if not boxes:
+    if not boxes or width <= 0 or height <= 0:
         return 1.0
 
-    cx_frame = float(width) / 2.0
-    cy_frame = float(height) / 2.0
+    cx_f = float(width) / 2.0
+    cy_f = float(height) / 2.0
 
     w_l, w_r, w_t, w_b = 0.0, 0.0, 0.0, 0.0
 
     for b in boxes:
-        cx_i = b['x'] + b['w'] / 2.0
-        cy_i = b['y'] + b['h'] / 2.0
-        area_i = float(b['w'] * b['h'])
-        dist_i = math.sqrt((cx_i - cx_frame) ** 2 + (cy_i - cy_frame) ** 2)
-        weight_i = area_i * dist_i
+        x1 = float(b['x'])
+        y1 = float(b['y'])
+        x2 = x1 + max(0.0, float(b['w']))
+        y2 = y1 + max(0.0, float(b['h']))
+        if x2 <= x1 or y2 <= y1:
+            continue
 
-        if cx_i < cx_frame:
-            w_l += weight_i
+        # Distribución horizontal: Eje vertical central en x = cx_f (Left vs Right)
+        if x2 <= cx_f:
+            a = (x2 - x1) * (y2 - y1)
+            cx_part = (x1 + x2) / 2.0
+            cy_part = (y1 + y2) / 2.0
+            d = math.hypot(cx_part - cx_f, cy_part - cy_f)
+            w_l += a * d
+        elif x1 >= cx_f:
+            a = (x2 - x1) * (y2 - y1)
+            cx_part = (x1 + x2) / 2.0
+            cy_part = (y1 + y2) / 2.0
+            d = math.hypot(cx_part - cx_f, cy_part - cy_f)
+            w_r += a * d
         else:
-            w_r += weight_i
+            # Cruza el eje vertical: subdividir en parte izquierda y parte derecha
+            a_l = (cx_f - x1) * (y2 - y1)
+            cx_l = (x1 + cx_f) / 2.0
+            cy_l = (y1 + y2) / 2.0
+            d_l = math.hypot(cx_l - cx_f, cy_l - cy_f)
+            w_l += a_l * d_l
 
-        if cy_i < cy_frame:
-            w_t += weight_i
+            a_r = (x2 - cx_f) * (y2 - y1)
+            cx_r = (cx_f + x2) / 2.0
+            cy_r = (y1 + y2) / 2.0
+            d_r = math.hypot(cx_r - cx_f, cy_r - cy_f)
+            w_r += a_r * d_r
+
+        # Distribución vertical: Eje horizontal central en y = cy_f (Top vs Bottom)
+        if y2 <= cy_f:
+            a = (x2 - x1) * (y2 - y1)
+            cx_part = (x1 + x2) / 2.0
+            cy_part = (y1 + y2) / 2.0
+            d = math.hypot(cx_part - cx_f, cy_part - cy_f)
+            w_t += a * d
+        elif y1 >= cy_f:
+            a = (x2 - x1) * (y2 - y1)
+            cx_part = (x1 + x2) / 2.0
+            cy_part = (y1 + y2) / 2.0
+            d = math.hypot(cx_part - cx_f, cy_part - cy_f)
+            w_b += a * d
         else:
-            w_b += weight_i
+            # Cruza el eje horizontal: subdividir en parte superior y parte inferior
+            a_t = (x2 - x1) * (cy_f - y1)
+            cx_t = (x1 + x2) / 2.0
+            cy_t = (y1 + cy_f) / 2.0
+            d_t = math.hypot(cx_t - cx_f, cy_t - cy_f)
+            w_t += a_t * d_t
+
+            a_b = (x2 - x1) * (y2 - cy_f)
+            cx_b = (x1 + x2) / 2.0
+            cy_b = (cy_f + y2) / 2.0
+            d_b = math.hypot(cx_b - cx_f, cy_b - cy_f)
+            w_b += a_b * d_b
 
     max_v = max(w_l, w_r)
     max_h = max(w_t, w_b)
@@ -281,13 +324,18 @@ def _compute_sequence(boxes: List[Dict], width: int, height: int) -> float:
 # 2. ÍNDICES COMPUESTOS (REGRESIÓN MÚLTIPLE Y ENTROPÍA)
 # ---------------------------------------------------------------------------
 
-def _compute_composite_scores(x: Dict[str, float]) -> Tuple[float, float, float]:
+def _compute_composite_scores(x: Dict[str, float]) -> Tuple[float, float]:
     """
-    Calcula los dos índices sintéticos del paper:
-    1. Regresión Múltiple (MRA, Ec. 22):
+    Calcula los dos índices sintéticos independientes de acuerdo con:
+    Wang et al. (2024), Symmetry 16(5), 523:
+
+    1. Modelo de Regresión Lineal Múltiple (MRA, Ec. 22):
        Y = -0.109*X1 + 0.549*X2 + 0.107*X3 + 0.340*X4 + 0.089*X5 + 0.483*X6 - 0.020*X7 - 0.430
-    2. Método de Entropía de Shannon (EWM, Ec. 32):
-       Y = 0.227020*X1 + 0.095302*X2 + 0.141894*X3 + 0.178283*X4 + 0.156697*X5 + 0.111903*X6 + 0.088901*X7
+
+    2. Modelo de Entropía de Shannon (EWM / EM, Ec. 32):
+       Yi = 0.227020*X1 + 0.095302*X2 + 0.141894*X3 + 0.178283*X4 + 0.156697*X5 + 0.111903*X6 + 0.088901*X7
+
+    Ambos modelos operan como índices comprensivos independientes y complementarios.
     """
     x1 = x["DE"]  # Densidad
     x2 = x["VS"]  # Simetría vertical
@@ -297,7 +345,7 @@ def _compute_composite_scores(x: Dict[str, float]) -> Tuple[float, float, float]
     x6 = x["SI"]  # Simplicidad
     x7 = x["SE"]  # Secuencia
 
-    # Modelo de Regresión Múltiple (MRA)
+    # Modelo de Regresión Múltiple (MRA, Ec. 22 del paper)
     raw_mra = (-0.109 * x1 +
                0.549 * x2 +
                0.107 * x3 +
@@ -306,14 +354,9 @@ def _compute_composite_scores(x: Dict[str, float]) -> Tuple[float, float, float]
                0.483 * x6 -
                0.020 * x7 -
                0.430)
+    score_mra = float(np.clip(raw_mra, 0.0, 1.0))
 
-    # Normalización del score de regresión a rango [0, 1]
-    # En el paper las calificaciones estaban en escala Likert centradas en [0.44, 0.76]
-    # Normalizamos linealmente para que 0.2 sea 0% y 0.85 sea 100%
-    norm_mra = (raw_mra + 0.20) / 0.85
-    score_mra = float(np.clip(norm_mra, 0.0, 1.0))
-
-    # Modelo de Entropía (EWM) - Los pesos suman exactamente 1.0
+    # Modelo de Entropía (EWM / EM, Ec. 32 del paper) - Los pesos suman exactamente 1.0
     score_entropy = (0.227020 * x1 +
                      0.095302 * x2 +
                      0.141894 * x3 +
@@ -323,10 +366,7 @@ def _compute_composite_scores(x: Dict[str, float]) -> Tuple[float, float, float]
                      0.088901 * x7)
     score_entropy = float(np.clip(score_entropy, 0.0, 1.0))
 
-    # Score global ponderado (promedio de regresión perceptual y entropía objetiva)
-    score_global = (score_mra + score_entropy) / 2.0
-
-    return score_mra, score_entropy, score_global
+    return score_mra, score_entropy
 
 
 # ---------------------------------------------------------------------------
@@ -448,18 +488,10 @@ def evaluate_multicriteria_layout(image_path: str) -> Dict[str, Any]:
         "SE": round(se, 4),
     }
 
-    # 2. Calcular índices compuestos
-    score_mra, score_entropy, score_global = _compute_composite_scores(metrics_raw)
+    # 2. Calcular los dos índices compuestos independientes del paper (MRA y Entropía)
+    score_mra, score_entropy = _compute_composite_scores(metrics_raw)
 
-    # 3. Determinar nivel de calidad
-    if score_global >= 0.72:
-        nivel = "Alta"
-    elif score_global >= 0.50:
-        nivel = "Media"
-    else:
-        nivel = "Baja"
-
-    # 4. Estructurar interpretaciones para UI
+    # 3. Estructurar interpretaciones para UI
     interpretaciones = {}
     for code, val in metrics_raw.items():
         meta = _METRIC_META[code]
@@ -538,9 +570,9 @@ def evaluate_multicriteria_layout(image_path: str) -> Dict[str, Any]:
         "total_elementos": len(boxes),
         "metricas": metrics_raw,
         "score_regresion": round(score_mra * 100.0, 1),
+        "score_regresion_raw": round(score_mra, 4),
         "score_entropia": round(score_entropy * 100.0, 1),
-        "score_global": round(score_global * 100.0, 1),
-        "nivel_calidad": nivel,
+        "score_entropia_raw": round(score_entropy, 4),
         "radar_data": radar_data,
         "interpretaciones": interpretaciones,
         "elementos": boxes[:50]
