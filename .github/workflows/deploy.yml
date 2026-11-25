@@ -2,7 +2,7 @@ name: Deploy Backend to Contabo VPS
 
 on:
   push:
-    branches: [ sandro, master, main ]
+    branches: [ master ]
 
 jobs:
   deploy:
@@ -13,37 +13,13 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
           password: ${{ secrets.VPS_PASSWORD }}
-          port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             set -e
-            DEPLOY_DIR="/opt/style-framework/FRAMEWORK-STYLE-BACK"
-            
-            # Si el proyecto aún no está clonado, clonarlo
-            if [ ! -d "$DEPLOY_DIR" ]; then
-              mkdir -p /opt/style-framework
-              cd /opt/style-framework
-              git clone -b sandro https://github.com/sergiocodev/FRAMEWORK-STYLE-BACK.git
-            fi
-            
-            cd "$DEPLOY_DIR"
-            
-            # Crear .env desde .env.example si no existe
-            if [ ! -f ".env" ]; then
-              cp .env.example .env
-            fi
-            
-            # Actualizar código desde git
+            cd /home/sandro/style-framework/FRAMEWORK-STYLE-BACK
             git fetch origin
-            git checkout sandro
-            git pull origin sandro
-            
-            # Levantar contenedores Docker
-            docker compose down || true
+            git checkout master
+            git pull origin master
             docker compose up -d --build
-            
-            # Limpiar imágenes obsoletas
             docker image prune -f
-            
             echo "¡Despliegue completado con éxito en Contabo VPS!"
