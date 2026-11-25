@@ -1,0 +1,12 @@
+# Configuración de Reverse Proxy con Caddy
+# Si tienes un dominio (ej: api.tudominio.com), reemplaza ':80' por tu dominio.
+# Caddy obtendrá y renovará automáticamente tu certificado SSL HTTPS (Let's Encrypt).
+
+:80 {
+    reverse_proxy backend:8000
+}
+
+# Si vas a usar dominio con HTTPS automático, descomenta esto y comenta el bloque anterior:
+# api.tudominio.com {
+#     reverse_proxy backend:8000
+# }
